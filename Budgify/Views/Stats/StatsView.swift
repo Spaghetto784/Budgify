@@ -32,7 +32,6 @@ struct StatsView: View {
     }
 
     var body: some View {
-        NavigationStack {
             List {
                 Section {
                     DatePicker("Mois", selection: $selectedMonth, displayedComponents: [.date])
@@ -73,5 +72,4 @@ struct StatsView: View {
             .navigationTitle("Stats")
             .onAppear { expenseVM.expenses = expenses }
         }
-    }
 }
