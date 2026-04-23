@@ -1,0 +1,29 @@
+{
+  "activityEntities" : [
+    "projectCreated",
+    [
+      {
+        "createdDate" : "2026-04-23T15:47:48Z",
+        "event" : "projectCreated",
+        "id" : "0E9494D6-8122-4B81-99E5-B40FCDFD23B2",
+        "subtitle" : "BudgifyClassifier",
+        "title" : "Project Created"
+      }
+    ]
+  ],
+  "authorName" : "Matthieu Greiner",
+  "createdDate" : "2026-04-23T15:47:48Z",
+  "description" : "",
+  "id" : "6F36A7A6-6F2F-4127-9372-D22CEB50DC73",
+  "license" : "",
+  "location" : "",
+  "modifiedDate" : "2026-04-23T15:47:48Z",
+  "projectName" : "BudgifyClassifier",
+  "settingsEntity" : {
+    "snapshotOnExtendTraining" : true,
+    "snapshotOnResumeTraining" : false
+  },
+  "taskType" : "textClassifier",
+  "title" : "Text Classification",
+  "version" : "1.1"
+}

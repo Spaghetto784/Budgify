@@ -1,0 +1,94 @@
+{
+  "activityEntities" : [
+    "dataSourceTrainingStarted",
+    [
+      {
+        "createdDate" : "2026-04-23T15:49:45Z",
+        "event" : "dataSourceTrainingStarted",
+        "id" : "46B25D6E-FA75-4A44-8DB8-F8AC93CB5AB7",
+        "subtitle" : "BudgifyClassifier 1",
+        "title" : "Used By"
+      }
+    ],
+    "dataSourceCreated",
+    [
+      {
+        "createdDate" : "2026-04-23T15:48:56Z",
+        "event" : "dataSourceCreated",
+        "id" : "3ECEF7E0-9CA7-442A-AC55-728D1B61C7C6",
+        "subtitle" : "training_data.json",
+        "title" : "Data Source Created"
+      }
+    ],
+    "dataSourceMetrics",
+    [
+      {
+        "createdDate" : "2026-04-23T15:49:45Z",
+        "event" : "dataSourceMetrics",
+        "id" : "583DB161-2D83-4200-B066-BBA8D5BF23D2",
+        "subtitle" : "7 Classes, 105 Items",
+        "title" : "Data Summary"
+      }
+    ]
+  ],
+  "createdDate" : "2026-04-23T15:48:56Z",
+  "dataPathRelativeToProjectURL" : "../training_data.json/",
+  "dataResult" : {
+    "classesCount" : 7,
+    "createdDate" : "2026-04-23T15:48:56Z",
+    "dataAnalysis" : {
+      "classifierAnalysis" : {
+        "labelStats" : {
+          "Logement" : 15,
+          "Loisirs" : 15,
+          "Nourriture" : 15,
+          "Santé" : 15,
+          "Shopping" : 15,
+          "Transport" : 15,
+          "Éducation" : 15
+        }
+      },
+      "issues" : [
+        {
+          "description" : "7 classes found, including Loisirs, Éducation, Logement",
+          "severity" : "debug"
+        },
+        {
+          "description" : "105 texts found, automatically creating validation set",
+          "severity" : "good"
+        },
+        {
+          "description" : "Smallest class is \"Nourriture\" with 15 texts",
+          "severity" : "debug"
+        },
+        {
+          "description" : "Largest class is \"Loisirs\" with 15 text",
+          "severity" : "debug"
+        }
+      ],
+      "objectDetectorAnalysis" : {
+        "details" : {
+
+        }
+      },
+      "summary" : {
+        "canUseValidation" : 1,
+        "classCount" : 7,
+        "sampleCount" : 105
+      }
+    },
+    "dataSourceID" : "D7903300-A236-4D61-8869-17C0C5FF2A85",
+    "dataURL" : "file:///Users/matth/Documents/Budgify/Budgify/ML/training_data.json",
+    "itemsCount" : 105
+  },
+  "dataURL" : "file:///Users/matth/Documents/Budgify/Budgify/ML/training_data.json",
+  "experimentIDs" : [
+    "0401B5AA-2252-4A4E-93DB-66E90ED768D4"
+  ],
+  "id" : "D7903300-A236-4D61-8869-17C0C5FF2A85",
+  "modifiedDate" : "2026-04-23T15:49:45Z",
+  "pathType" : 0,
+  "preferredFilename" : "training_data.json",
+  "title" : "training_data.json",
+  "version" : "1.0"
+}

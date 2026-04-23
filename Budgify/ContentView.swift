@@ -2,18 +2,21 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Query(sort: \Expense.date, order: .reverse) private var expenses: [Expense]
+    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @Query private var budgets: [Budget]
-    @Environment(ExpenseViewModel.self) private var expenseVM
+    @Query private var accounts: [SavingsAccount]
+    @Query private var goals: [SavingsGoal]
+    @Environment(TransactionViewModel.self) private var transactionVM
     @Environment(BudgetViewModel.self) private var budgetVM
+    @Environment(SavingsViewModel.self) private var savingsVM
 
     var body: some View {
         TabView {
             NavigationStack {
-                ExpenseListView()
+                TransactionListView()
             }
             .tabItem {
-                Label("Dépenses", systemImage: "list.bullet")
+                Label("Transactions", systemImage: "list.bullet")
             }
             NavigationStack {
                 BudgetView()
@@ -28,6 +31,12 @@ struct ContentView: View {
                 Label("Stats", systemImage: "chart.pie")
             }
             NavigationStack {
+                SavingsView()
+            }
+            .tabItem {
+                Label("Savings", systemImage: "banknote")
+            }
+            NavigationStack {
                 CategoryListView()
             }
             .tabItem {
@@ -35,8 +44,10 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            expenseVM.expenses = expenses
+            transactionVM.transactions = transactions
             budgetVM.budgets = budgets
+            savingsVM.accounts = accounts
+            savingsVM.goals = goals
         }
     }
 }

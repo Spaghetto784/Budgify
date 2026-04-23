@@ -10,6 +10,10 @@ final class BudgetViewModel {
         try? context.save()
     }
 
+    func update(context: ModelContext) {
+        try? context.save()
+    }
+
     func delete(budget: Budget, context: ModelContext) {
         context.delete(budget)
         try? context.save()
@@ -20,10 +24,5 @@ final class BudgetViewModel {
         return budgets.first {
             calendar.isDate($0.month, equalTo: month, toGranularity: .month)
         }
-    }
-
-    func remaining(spent: Double, for month: Date) -> Double {
-        guard let budget = budget(for: month) else { return 0 }
-        return budget.limit - spent
     }
 }
