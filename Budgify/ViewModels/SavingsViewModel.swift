@@ -39,6 +39,20 @@ final class SavingsViewModel {
         try? context.save()
     }
 
+    func recommendedWeeklyContribution(for goal: SavingsGoal, from referenceDate: Date = .now) -> Double? {
+        guard let deadline = goal.deadline else { return nil }
+        let remaining = max(goal.target - goal.current, 0)
+        guard remaining > 0 else { return 0 }
+
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: referenceDate)
+        let end = calendar.startOfDay(for: deadline)
+        guard let days = calendar.dateComponents([.day], from: start, to: end).day, days > 0 else { return nil }
+
+        let weeks = max(Double(days) / 7.0, 1)
+        return remaining / weeks
+    }
+
     func totalWorth(in currency: String, rates: [String: Double]) -> Double {
         accounts.reduce(0) { acc, account in
             if account.currency == currency { return acc + account.balance }

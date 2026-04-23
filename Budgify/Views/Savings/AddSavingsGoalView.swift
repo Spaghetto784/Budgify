@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct AddSavingsGoalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(SavingsViewModel.self) private var savingsVM
+    @Environment(CurrencyService.self) private var currencyService
+    @Environment(SettingsViewModel.self) private var settingsVM
 
     @State private var name = ""
     @State private var target = ""
@@ -15,6 +18,17 @@ struct AddSavingsGoalView: View {
 
     private let icons = ["🎯", "🏠", "✈️", "🎓", "💍", "🚗", "💻", "🎮"]
 
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
+
+    private var weeklyNeededPreview: Double? {
+        guard hasDeadline, let tgt = Double(target) else { return nil }
+        let cur = Double(current) ?? 0
+        let previewGoal = SavingsGoal(name: "", target: tgt, current: cur, currency: currency, deadline: deadline, icon: icon)
+        return savingsVM.recommendedWeeklyContribution(for: previewGoal)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -25,8 +39,9 @@ struct AddSavingsGoalView: View {
                     TextField("Déjà épargné", text: $current)
                         .keyboardType(.decimalPad)
                     Picker("Devise", selection: $currency) {
-                        Text("EUR €").tag("EUR")
-                        Text("THB ฿").tag("THB")
+                        ForEach(displayCurrencies, id: \.self) { c in
+                            Text(currencyService.displayLabel(for: c)).tag(c)
+                        }
                     }
                 }
                 Section {
@@ -35,6 +50,18 @@ struct AddSavingsGoalView: View {
                         DatePicker("Date", selection: $deadline, displayedComponents: .date)
                     }
                 }
+
+                if let weeklyNeededPreview {
+                    Section("Plan recommandé") {
+                        HStack {
+                            Text("À épargner / semaine")
+                            Spacer()
+                            Text("\(currencyService.symbol(for: currency))\(String(format: "%.2f", weeklyNeededPreview))")
+                                .bold()
+                        }
+                    }
+                }
+
                 Section("Icône") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 12) {
                         ForEach(icons, id: \.self) { i in
@@ -58,6 +85,9 @@ struct AddSavingsGoalView: View {
                     Button("Créer") { save() }
                         .disabled(name.isEmpty || Double(target) == nil)
                 }
+            }
+            .onAppear {
+                currency = displayCurrencies.first ?? "EUR"
             }
         }
     }

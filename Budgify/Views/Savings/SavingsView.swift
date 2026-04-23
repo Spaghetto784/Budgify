@@ -6,23 +6,29 @@ struct SavingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(CurrencyService.self) private var currencyService
     @Environment(SavingsViewModel.self) private var savingsVM
+    @Environment(SettingsViewModel.self) private var settingsVM
     @Query private var accounts: [SavingsAccount]
     @Query private var goals: [SavingsGoal]
     @State private var selectedCurrency = "EUR"
     @State private var showAddAccount = false
     @State private var showAddGoal = false
 
-    private var symbol: String { selectedCurrency == "EUR" ? "€" : "฿" }
+    private var symbol: String { currencyService.symbol(for: selectedCurrency) }
     private var totalWorth: Double { savingsVM.totalWorth(in: selectedCurrency, rates: currencyService.rates) }
+
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
 
     var body: some View {
         List {
             Section {
-                Picker("", selection: $selectedCurrency) {
-                    Text("EUR €").tag("EUR")
-                    Text("THB ฿").tag("THB")
+                Picker("Devise", selection: $selectedCurrency) {
+                    ForEach(displayCurrencies, id: \.self) { c in
+                        Text(currencyService.displayLabel(for: c)).tag(c)
+                    }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
             }
 
             Section("Net worth") {
@@ -49,7 +55,7 @@ struct SavingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text("\(account.currency == "EUR" ? "€" : "฿")\(String(format: "%.2f", account.balance))")
+                            Text("\(currencyService.symbol(for: account.currency))\(String(format: "%.2f", account.balance))")
                                 .bold()
                         }
                     }
@@ -57,7 +63,6 @@ struct SavingsView: View {
                 .onDelete { indexSet in
                     indexSet.forEach { savingsVM.deleteAccount(account: accounts[$0], context: context) }
                 }
-
                 Button { showAddAccount = true } label: {
                     Label("Ajouter un compte", systemImage: "plus.circle")
                 }
@@ -79,11 +84,11 @@ struct SavingsView: View {
                         ProgressView(value: goal.progress)
                             .tint(goal.progress >= 1 ? .green : .blue)
                         HStack {
-                            Text("\(goal.currency == "EUR" ? "€" : "฿")\(String(format: "%.0f", goal.current))")
+                            Text("\(currencyService.symbol(for: goal.currency))\(String(format: "%.0f", goal.current))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(goal.currency == "EUR" ? "€" : "฿")\(String(format: "%.0f", goal.target))")
+                            Text("\(currencyService.symbol(for: goal.currency))\(String(format: "%.0f", goal.target))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -92,13 +97,23 @@ struct SavingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
+                        if let weekly = savingsVM.recommendedWeeklyContribution(for: goal) {
+                            if weekly > 0 {
+                                Text("Objectif recommandé : \(currencyService.symbol(for: goal.currency))\(String(format: "%.2f", weekly)) / semaine")
+                                    .font(.caption2)
+                                    .foregroundStyle(.blue)
+                            } else {
+                                Text("Objectif atteint")
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                            }
+                        }
                     }
                     .padding(.vertical, 4)
                 }
                 .onDelete { indexSet in
                     indexSet.forEach { savingsVM.deleteGoal(goal: goals[$0], context: context) }
                 }
-
                 Button { showAddGoal = true } label: {
                     Label("Ajouter un objectif", systemImage: "plus.circle")
                 }
@@ -108,6 +123,7 @@ struct SavingsView: View {
         .onAppear {
             savingsVM.accounts = accounts
             savingsVM.goals = goals
+            selectedCurrency = displayCurrencies.first ?? "EUR"
         }
         .sheet(isPresented: $showAddAccount) {
             AddSavingsAccountView()

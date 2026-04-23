@@ -6,13 +6,16 @@ struct TransactionRowView: View {
     let rates: [String: Double]
 
     private var convertedAmount: Double {
-        if transaction.currency == displayCurrency { return transaction.amount }
-        if displayCurrency == "THB", let rate = rates["THB"] { return transaction.amount * rate }
-        if displayCurrency == "EUR", let rate = rates["THB"] { return transaction.amount / rate }
-        return transaction.amount
+        convert(amount: transaction.amount, from: transaction.currency, to: displayCurrency)
     }
 
-    private var symbol: String { displayCurrency == "EUR" ? "€" : "฿" }
+    private var symbol: String {
+        let symbols: [String: String] = [
+            "EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "CHF": "Fr",
+            "CAD": "C$", "AUD": "A$", "CNY": "¥", "INR": "₹", "SGD": "S$", "THB": "฿"
+        ]
+        return symbols[displayCurrency] ?? ""
+    }
 
     private var typeColor: Color {
         switch transaction.type {
@@ -58,5 +61,17 @@ struct TransactionRowView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func convert(amount: Double, from: String, to: String) -> Double {
+        guard from != to else { return amount }
+        if from == "EUR" {
+            return amount * (rates[to] ?? 1)
+        }
+        if to == "EUR" {
+            return amount / (rates[from] ?? 1)
+        }
+        let inEUR = amount / (rates[from] ?? 1)
+        return inEUR * (rates[to] ?? 1)
     }
 }

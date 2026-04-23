@@ -5,12 +5,17 @@ import Charts
 struct StatsView: View {
     @Environment(TransactionViewModel.self) private var transactionVM
     @Environment(CurrencyService.self) private var currencyService
+    @Environment(SettingsViewModel.self) private var settingsVM
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @Query private var categories: [Category]
     @State private var selectedCurrency = "EUR"
     @State private var selectedMonth = Date.now
 
-    private var symbol: String { selectedCurrency == "EUR" ? "€" : "฿" }
+    private var symbol: String { currencyService.symbol(for: selectedCurrency) }
+
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
 
     private var monthTransactions: [Transaction] { transactionVM.transactions(for: selectedMonth) }
 
@@ -46,11 +51,12 @@ struct StatsView: View {
         List {
             Section {
                 DatePicker("Mois", selection: $selectedMonth, displayedComponents: [.date])
-                Picker("", selection: $selectedCurrency) {
-                    Text("EUR €").tag("EUR")
-                    Text("THB ฿").tag("THB")
+                Picker("Devise", selection: $selectedCurrency) {
+                    ForEach(displayCurrencies, id: \.self) { code in
+                        Text(currencyService.displayLabel(for: code)).tag(code)
+                    }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
             }
 
             Section("Vue d'ensemble") {
@@ -127,7 +133,10 @@ struct StatsView: View {
             }
         }
         .navigationTitle("Stats")
-        .onAppear { transactionVM.transactions = transactions }
+        .onAppear {
+            transactionVM.transactions = transactions
+            selectedCurrency = displayCurrencies.first ?? "EUR"
+        }
     }
 
     private func overviewCard(label: String, value: Double, color: Color, icon: String) -> some View {

@@ -6,6 +6,9 @@ struct TransactionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(CurrencyService.self) private var currencyService
     @Environment(TransactionViewModel.self) private var transactionVM
+    @Environment(SettingsViewModel.self) private var settingsVM
+    @Environment(SecurityService.self) private var securityService
+
     let transaction: Transaction
     @State private var selectedCurrency: String
 
@@ -15,13 +18,31 @@ struct TransactionDetailView: View {
     }
 
     private var convertedAmount: Double {
-        if transaction.currency == selectedCurrency { return transaction.amount }
-        if selectedCurrency == "THB", let rate = currencyService.rates["THB"] { return transaction.amount * rate }
-        if selectedCurrency == "EUR", let rate = currencyService.rates["THB"] { return transaction.amount / rate }
-        return transaction.amount
+        currencyService.convert(amount: transaction.amount, from: transaction.currency, to: selectedCurrency)
     }
 
-    private var symbol: String { selectedCurrency == "EUR" ? "€" : "฿" }
+    private var symbol: String { currencyService.symbol(for: selectedCurrency) }
+
+    private var displayCurrencies: [String] {
+        let selected = settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+        if selected.contains(transaction.currency) {
+            return selected
+        }
+        return selected + [transaction.currency]
+    }
+
+    private var displayNote: String {
+        if let ciphertext = transaction.noteCiphertext,
+           let decrypted = securityService.decrypt(ciphertext) {
+            return decrypted
+        }
+        return transaction.note
+    }
+
+    private var noteIntegrityValid: Bool? {
+        guard let expectedHash = transaction.noteHash, !displayNote.isEmpty else { return nil }
+        return securityService.hash(displayNote) == expectedHash
+    }
 
     private var typeLabel: String {
         switch transaction.type {
@@ -57,11 +78,13 @@ struct TransactionDetailView: View {
             }
 
             Section("Montant") {
-                Picker("", selection: $selectedCurrency) {
-                    Text("EUR €").tag("EUR")
-                    Text("THB ฿").tag("THB")
+                Picker("Devise", selection: $selectedCurrency) {
+                    ForEach(displayCurrencies, id: \.self) { code in
+                        Text(currencyService.displayLabel(for: code)).tag(code)
+                    }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
+
                 Text("\(symbol)\(String(format: "%.2f", convertedAmount))")
                     .font(.title.bold())
                     .foregroundStyle(typeColor)
@@ -71,9 +94,19 @@ struct TransactionDetailView: View {
                 Text(transaction.date.formatted(date: .long, time: .omitted))
             }
 
-            if !transaction.note.isEmpty {
+            if !displayNote.isEmpty {
                 Section("Note") {
-                    Text(transaction.note)
+                    Text(displayNote)
+                    if transaction.noteCiphertext != nil {
+                        Label("Note chiffrée (AES-256)", systemImage: "lock.shield")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let integrity = noteIntegrityValid {
+                        Label(integrity ? "Intégrité hash validée" : "Alerte: hash invalide", systemImage: integrity ? "checkmark.seal" : "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(integrity ? .green : .red)
+                    }
                 }
             }
 

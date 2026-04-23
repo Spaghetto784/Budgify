@@ -6,6 +6,10 @@ struct AddTransactionView: View {
     @Environment(\.modelContext) private var context
     @Environment(TransactionViewModel.self) private var transactionVM
     @Environment(CategoryClassifier.self) private var classifier
+    @Environment(CurrencyService.self) private var currencyService
+    @Environment(CategoryViewModel.self) private var categoryVM
+    @Environment(SettingsViewModel.self) private var settingsVM
+    @Environment(SecurityService.self) private var securityService
     @Query private var categories: [Category]
 
     @State private var title = ""
@@ -16,6 +20,12 @@ struct AddTransactionView: View {
     @State private var selectedCategory: Category?
     @State private var note = ""
     @State private var suggestedCategory: Category?
+    @State private var isRecurring = false
+    @State private var recurrenceFrequency: RecurrenceFrequency = .monthly
+
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,27 +49,63 @@ struct AddTransactionView: View {
                     TextField("Montant", text: $amount)
                         .keyboardType(.decimalPad)
                     Picker("Devise", selection: $currency) {
-                        Text("EUR €").tag("EUR")
-                        Text("THB ฿").tag("THB")
+                        ForEach(displayCurrencies, id: \.self) { c in
+                            Text(currencyService.displayLabel(for: c)).tag(c)
+                        }
                     }
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
 
+                Section("Récurrence") {
+                    Toggle("Transaction récurrente", isOn: $isRecurring)
+                    if isRecurring {
+                        Picker("Fréquence", selection: $recurrenceFrequency) {
+                            Text("Hebdomadaire").tag(RecurrenceFrequency.weekly)
+                            Text("Mensuelle").tag(RecurrenceFrequency.monthly)
+                        }
+                    }
+                }
+
                 if type == .expense {
-                    if let suggestion = suggestedCategory, selectedCategory == nil {
-                        Section {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(.blue)
-                                Text("Suggestion : \(suggestion.icon) \(suggestion.name)")
-                                Spacer()
-                                Button("Appliquer") {
-                                    selectedCategory = suggestion
-                                    classifier.addTrainingSample(title: title, categoryName: suggestion.name)
+                    if !title.isEmpty, let predictedLabel = classifier.predictedLabel(for: title) {
+                        if let matched = suggestedCategory, selectedCategory == nil {
+                            Section {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                        .foregroundStyle(.blue)
+                                    Text("\(matched.icon) \(matched.name)")
+                                    Spacer()
+                                    Button("Appliquer") {
+                                        selectedCategory = matched
+                                        classifier.addTrainingSample(title: title, categoryName: matched.name)
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
                                 }
-                                .font(.caption)
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
+                            }
+                        } else if selectedCategory == nil {
+                            Section {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                        .foregroundStyle(.blue)
+                                    Text("Créer \"\(predictedLabel)\"")
+                                    Spacer()
+                                    Button("Créer") {
+                                        let icons = ["Nourriture": "🍔", "Transport": "🚗", "Logement": "🏠", "Loisirs": "🎮", "Santé": "💊", "Shopping": "🛍️", "Éducation": "📚"]
+                                        let colors = ["Nourriture": "FF6B6B", "Transport": "45B7D1", "Logement": "96CEB4", "Loisirs": "DDA0DD", "Santé": "98D8C8", "Shopping": "FFEAA7", "Éducation": "4ECDC4"]
+                                        let cat = Category(
+                                            name: predictedLabel,
+                                            colorHex: colors[predictedLabel] ?? "96CEB4",
+                                            icon: icons[predictedLabel] ?? "📌"
+                                        )
+                                        categoryVM.add(category: cat, context: context)
+                                        selectedCategory = cat
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                }
                             }
                         }
                     }
@@ -94,6 +140,11 @@ struct AddTransactionView: View {
 
                 Section("Note (optionnel)") {
                     TextField("Note", text: $note)
+                    if settingsVM.settings?.dataEncryptionEnabled == true {
+                        Label("Cette note sera chiffrée (AES-256)", systemImage: "lock.shield")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("Nouvelle transaction")
@@ -107,6 +158,9 @@ struct AddTransactionView: View {
                         .disabled(!isValid)
                 }
             }
+            .onAppear {
+                currency = displayCurrencies.first ?? "EUR"
+            }
         }
     }
 
@@ -116,8 +170,34 @@ struct AddTransactionView: View {
 
     private func save() {
         guard let amt = Double(amount) else { return }
-        let t = Transaction(title: title, amount: amt, date: date, currency: currency, type: type, category: selectedCategory, note: note)
-        transactionVM.add(transaction: t, context: context)
+
+        let shouldEncrypt = settingsVM.settings?.dataEncryptionEnabled == true
+        let noteHash = note.isEmpty ? nil : securityService.hash(note)
+        let ciphertext = shouldEncrypt ? securityService.encrypt(note) : nil
+        let storedNote = (shouldEncrypt && ciphertext != nil) ? "" : note
+
+        let transaction = Transaction(
+            title: title,
+            amount: amt,
+            date: date,
+            currency: currency,
+            type: type,
+            category: selectedCategory,
+            note: storedNote,
+            noteCiphertext: ciphertext,
+            noteHash: noteHash
+        )
+
+        transactionVM.add(transaction: transaction, context: context)
+
+        if type == .expense, let selectedCategory {
+            classifier.addTrainingSample(title: title, categoryName: selectedCategory.name)
+        }
+
+        if isRecurring {
+            transactionVM.addRecurringTemplate(from: transaction, frequency: recurrenceFrequency, context: context)
+        }
+
         dismiss()
     }
 }

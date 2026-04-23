@@ -6,14 +6,14 @@ struct BudgetView: View {
     @Environment(BudgetViewModel.self) private var budgetVM
     @Environment(TransactionViewModel.self) private var transactionVM
     @Environment(CurrencyService.self) private var currencyService
+    @Environment(SettingsViewModel.self) private var settingsVM
     @Query private var budgets: [Budget]
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var selectedMonth = Date.now
     @State private var showAdd = false
-    @State private var showEdit = false
 
     private var currentBudget: Budget? { budgetVM.budget(for: selectedMonth) }
-    private var symbol: String { currentBudget?.currency == "THB" ? "฿" : "€" }
+    private var symbol: String { currentBudget.map { currencyService.symbol(for: $0.currency) } ?? "€" }
     private var currency: String { currentBudget?.currency ?? "EUR" }
 
     private var spent: Double {
@@ -33,6 +33,16 @@ struct BudgetView: View {
 
     private var monthTransactions: [Transaction] {
         transactionVM.transactions(for: selectedMonth).filter { $0.type == .expense }
+    }
+
+    private var alertMessage: String? {
+        guard let budget = currentBudget else { return nil }
+        return budgetVM.alertMessage(for: budget, spent: spent)
+    }
+
+    private var projectedOverrunDays: Int? {
+        guard let budget = currentBudget else { return nil }
+        return budgetVM.projectedOverrunInDays(for: budget, spent: spent, month: selectedMonth)
     }
 
     var body: some View {
@@ -78,6 +88,38 @@ struct BudgetView: View {
                         }
                     }
                     .padding(.vertical, 4)
+
+                    if budget.rolloverFromPreviousMonth > 0 {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundStyle(.blue)
+                            Text("Report du mois précédent")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("+\(symbol)\(String(format: "%.2f", budget.rolloverFromPreviousMonth))")
+                                .font(.caption.bold())
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+
+                if let alertMessage {
+                    Section("Alertes") {
+                        Label(alertMessage, systemImage: "bell.badge.fill")
+                            .foregroundStyle(.orange)
+                        if let projectedOverrunDays, projectedOverrunDays > 0 {
+                            Text("Au rythme actuel, dépassement estimé dans \(projectedOverrunDays) jour(s).")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else if let projectedOverrunDays, projectedOverrunDays > 0 {
+                    Section("Prévision") {
+                        Text("Au rythme actuel, dépassement estimé dans \(projectedOverrunDays) jour(s).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Revenus du mois") {
@@ -160,9 +202,25 @@ struct BudgetView: View {
         .onAppear {
             budgetVM.budgets = budgets
             transactionVM.transactions = transactions
+            budgetVM.ensureRecurringBudgetForCurrentMonth(context: context, transactions: transactions, rates: currencyService.rates)
+            triggerBudgetNotificationIfNeeded()
         }
         .onChange(of: selectedMonth) { _, _ in
             budgetVM.budgets = budgets
+            triggerBudgetNotificationIfNeeded()
         }
+        .onChange(of: budgets.count) { _, _ in
+            budgetVM.budgets = budgets
+            triggerBudgetNotificationIfNeeded()
+        }
+        .onChange(of: transactions.count) { _, _ in
+            transactionVM.transactions = transactions
+            triggerBudgetNotificationIfNeeded()
+        }
+    }
+
+    private func triggerBudgetNotificationIfNeeded() {
+        guard settingsVM.settings?.budgetAlertsEnabled == true, let budget = currentBudget else { return }
+        budgetVM.notifyIfNeeded(for: budget, spent: spent, month: selectedMonth)
     }
 }

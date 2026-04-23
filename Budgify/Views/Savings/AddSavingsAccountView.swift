@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct AddSavingsAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(SavingsViewModel.self) private var savingsVM
+    @Environment(CurrencyService.self) private var currencyService
+    @Environment(SettingsViewModel.self) private var settingsVM
 
     @State private var name = ""
     @State private var balance = ""
@@ -11,6 +14,10 @@ struct AddSavingsAccountView: View {
     @State private var icon = "🏦"
 
     private let icons = ["🏦", "💰", "🐖", "📈", "🏠", "✈️", "🎓", "💎"]
+
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
 
     var body: some View {
         NavigationStack {
@@ -20,10 +27,12 @@ struct AddSavingsAccountView: View {
                     TextField("Solde initial", text: $balance)
                         .keyboardType(.decimalPad)
                     Picker("Devise", selection: $currency) {
-                        Text("EUR €").tag("EUR")
-                        Text("THB ฿").tag("THB")
+                        ForEach(displayCurrencies, id: \.self) { code in
+                            Text(currencyService.displayLabel(for: code)).tag(code)
+                        }
                     }
                 }
+
                 Section("Icône") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 12) {
                         ForEach(icons, id: \.self) { i in
@@ -47,6 +56,9 @@ struct AddSavingsAccountView: View {
                     Button("Créer") { save() }
                         .disabled(name.isEmpty || Double(balance) == nil)
                 }
+            }
+            .onAppear {
+                currency = displayCurrencies.first ?? "EUR"
             }
         }
     }

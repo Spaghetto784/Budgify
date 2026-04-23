@@ -5,26 +5,31 @@ struct TransactionListView: View {
     @Environment(\.modelContext) private var context
     @Environment(CurrencyService.self) private var currencyService
     @Environment(TransactionViewModel.self) private var transactionVM
+    @Environment(SettingsViewModel.self) private var settingsVM
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var showAdd = false
     @State private var selectedCurrency = "EUR"
     @State private var selectedType: TransactionType? = nil
 
-    private var filtered: [Transaction] {
-        guard let type = selectedType else { return transactions }
-        return transactions.filter { $0.type == type }
+    private var displayCurrencies: [String] {
+        settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
     }
 
-    private var symbol: String { selectedCurrency == "EUR" ? "€" : "฿" }
+    private var filtered: [Transaction] {
+        let nonTemplates = transactions.filter { !$0.isRecurringTemplate }
+        guard let type = selectedType else { return nonTemplates }
+        return nonTemplates.filter { $0.type == type }
+    }
 
     var body: some View {
         List {
             Section {
-                Picker("", selection: $selectedCurrency) {
-                    Text("EUR €").tag("EUR")
-                    Text("THB ฿").tag("THB")
+                Picker("Devise", selection: $selectedCurrency) {
+                    ForEach(displayCurrencies, id: \.self) { c in
+                        Text(currencyService.displayLabel(for: c)).tag(c)
+                    }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
 
                 Picker("Type", selection: $selectedType) {
                     Text("Tout").tag(Optional<TransactionType>.none)
@@ -62,6 +67,10 @@ struct TransactionListView: View {
         .sheet(isPresented: $showAdd) {
             AddTransactionView()
         }
-        .onAppear { transactionVM.transactions = transactions }
+        .onAppear {
+            transactionVM.transactions = transactions
+            transactionVM.generateDueRecurringTransactions(context: context)
+            selectedCurrency = displayCurrencies.first ?? "EUR"
+        }
     }
 }
