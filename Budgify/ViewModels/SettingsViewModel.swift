@@ -3,6 +3,11 @@ import Foundation
 import LocalAuthentication
 import UserNotifications
 
+struct EncryptionRotationResult {
+    var rotated: Bool
+    var reencryptedCount: Int
+}
+
 @Observable
 final class SettingsViewModel {
     var settings: AppSettings?
@@ -103,6 +108,38 @@ final class SettingsViewModel {
             settings?.budgetAlertsEnabled = false
             save(context: context)
         }
+    }
+
+    func rotateEncryptionKey(context: ModelContext, securityService: SecurityService) -> EncryptionRotationResult {
+        guard let transactions = try? context.fetch(FetchDescriptor<Transaction>()) else {
+            return .init(rotated: false, reencryptedCount: 0)
+        }
+
+        var plaintextByID: [PersistentIdentifier: String] = [:]
+
+        for transaction in transactions {
+            guard let cipher = transaction.noteCiphertext,
+                  let plaintext = securityService.decrypt(cipher)
+            else {
+                continue
+            }
+            plaintextByID[transaction.persistentModelID] = plaintext
+        }
+
+        securityService.rotateKey()
+
+        var count = 0
+        for transaction in transactions {
+            if let plaintext = plaintextByID[transaction.persistentModelID],
+               let newCipher = securityService.encrypt(plaintext) {
+                transaction.noteCiphertext = newCipher
+                transaction.noteHash = securityService.hash(plaintext)
+                count += 1
+            }
+        }
+
+        try? context.save()
+        return .init(rotated: true, reencryptedCount: count)
     }
 
     func lockAllTabs() {

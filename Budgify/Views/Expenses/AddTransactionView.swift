@@ -182,7 +182,10 @@ struct AddTransactionView: View {
             date: date,
             currency: currency,
             type: type,
-            category: selectedCategory,
+            category: nil,
+            categoryNameSnapshot: selectedCategory?.name,
+            categoryIconSnapshot: selectedCategory?.icon,
+            categoryColorHexSnapshot: selectedCategory?.colorHex,
             note: storedNote,
             noteCiphertext: ciphertext,
             noteHash: noteHash

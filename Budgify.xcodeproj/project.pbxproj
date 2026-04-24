@@ -6,7 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B93BD63F2F9B881D00C07CFD /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B93BD63E2F9B881D00C07CFD /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		B93BD63E2F9B881D00C07CFD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B9E97CDB2F995D4C001C4BB5 /* Budgify.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Budgify.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -34,6 +39,7 @@
 			children = (
 				B9E97CDD2F995D4C001C4BB5 /* Budgify */,
 				B9E97CDC2F995D4C001C4BB5 /* Products */,
+				B93BD63E2F9B881D00C07CFD /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B93BD63F2F9B881D00C07CFD /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

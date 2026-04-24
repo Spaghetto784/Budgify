@@ -3,6 +3,12 @@ import SwiftData
 
 @Observable
 final class DataBackupService {
+    private struct SnapshotEnvelope: Codable {
+        var payloadBase64: String
+        var payloadHash: String
+        var createdAt: Date
+    }
+
     private struct Snapshot: Codable {
         var categories: [CategorySnapshot]
         var transactions: [TransactionSnapshot]
@@ -25,6 +31,8 @@ final class DataBackupService {
         var currency: String
         var typeRaw: String
         var categoryName: String?
+        var categoryIcon: String?
+        var categoryColorHex: String?
         var note: String
         var noteCiphertext: String?
         var noteHash: String?
@@ -79,6 +87,8 @@ final class DataBackupService {
         var dataEncryptionEnabled: Bool
     }
 
+    private let securityService = SecurityService()
+
     private var backupURL: URL? {
         do {
             let appSupport = try FileManager.default.url(
@@ -87,7 +97,7 @@ final class DataBackupService {
                 appropriateFor: nil,
                 create: true
             )
-            return appSupport.appendingPathComponent("BudgifyBackup.json")
+            return appSupport.appendingPathComponent("BudgifyBackup.enc")
         } catch {
             return nil
         }
@@ -112,7 +122,9 @@ final class DataBackupService {
                     date: $0.date,
                     currency: $0.currency,
                     typeRaw: $0.type.rawValue,
-                    categoryName: $0.category?.name,
+                    categoryName: $0.resolvedCategoryName,
+                    categoryIcon: $0.resolvedCategoryIcon,
+                    categoryColorHex: $0.resolvedCategoryColorHex,
                     note: $0.note,
                     noteCiphertext: $0.noteCiphertext,
                     noteHash: $0.noteHash,
@@ -168,8 +180,17 @@ final class DataBackupService {
         )
 
         do {
-            let data = try JSONEncoder().encode(snapshot)
-            try data.write(to: backupURL, options: .atomic)
+            let plaintext = try JSONEncoder().encode(snapshot)
+            guard let encrypted = securityService.encrypt(data: plaintext) else { return }
+
+            let envelope = SnapshotEnvelope(
+                payloadBase64: encrypted.base64EncodedString(),
+                payloadHash: securityService.hash(data: plaintext),
+                createdAt: .now
+            )
+
+            let envelopeData = try JSONEncoder().encode(envelope)
+            try envelopeData.write(to: backupURL, options: .atomic)
         } catch {
             return
         }
@@ -198,13 +219,19 @@ final class DataBackupService {
 
         do {
             let data = try Data(contentsOf: backupURL)
-            let snapshot = try JSONDecoder().decode(Snapshot.self, from: data)
+            let envelope = try JSONDecoder().decode(SnapshotEnvelope.self, from: data)
+            guard let payloadData = Data(base64Encoded: envelope.payloadBase64),
+                  let decrypted = securityService.decrypt(data: payloadData),
+                  securityService.hash(data: decrypted) == envelope.payloadHash
+            else {
+                return false
+            }
 
-            var categoriesByName: [String: Category] = [:]
+            let snapshot = try JSONDecoder().decode(Snapshot.self, from: decrypted)
+
             for category in snapshot.categories {
                 let model = Category(name: category.name, colorHex: category.colorHex, icon: category.icon)
                 context.insert(model)
-                categoriesByName[category.name] = model
             }
 
             for transaction in snapshot.transactions {
@@ -214,7 +241,10 @@ final class DataBackupService {
                     date: transaction.date,
                     currency: transaction.currency,
                     type: TransactionType(rawValue: transaction.typeRaw) ?? .expense,
-                    category: transaction.categoryName.flatMap { categoriesByName[$0] },
+                    category: nil,
+                    categoryNameSnapshot: transaction.categoryName,
+                    categoryIconSnapshot: transaction.categoryIcon,
+                    categoryColorHexSnapshot: transaction.categoryColorHex,
                     note: transaction.note,
                     noteCiphertext: transaction.noteCiphertext,
                     noteHash: transaction.noteHash,

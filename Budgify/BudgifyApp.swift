@@ -12,6 +12,7 @@ struct BudgifyApp: App {
     @State private var settingsVM = SettingsViewModel()
     @State private var securityService = SecurityService()
     @State private var backupService = DataBackupService()
+    @State private var expensePDFService = ExpensePDFService()
 
     var body: some Scene {
         WindowGroup {
@@ -25,22 +26,13 @@ struct BudgifyApp: App {
                 .environment(settingsVM)
                 .environment(securityService)
                 .environment(backupService)
+                .environment(expensePDFService)
                 .task { await currencyService.fetchRates() }
         }
         .modelContainer(sharedModelContainer)
     }
 
     private var sharedModelContainer: ModelContainer {
-        let schema = Schema([
-            Transaction.self,
-            Category.self,
-            Budget.self,
-            SavingsAccount.self,
-            SavingsEntry.self,
-            SavingsGoal.self,
-            AppSettings.self
-        ])
-
         do {
             let appSupport = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -49,8 +41,13 @@ struct BudgifyApp: App {
                 create: true
             )
             let storeURL = appSupport.appendingPathComponent("Budgify.store")
-            let configuration = ModelConfiguration(schema: schema, url: storeURL)
-            return try ModelContainer(for: schema, configurations: [configuration])
+            let currentSchema = Schema(BudgifySchemaV2.models)
+            let configuration = ModelConfiguration(schema: currentSchema, url: storeURL)
+            return try ModelContainer(
+                for: currentSchema,
+                migrationPlan: BudgifyMigrationPlan.self,
+                configurations: [configuration]
+            )
         } catch {
             fatalError("Unable to initialize SwiftData store: \(error)")
         }

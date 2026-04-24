@@ -42,8 +42,10 @@ struct TransactionRowView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(transaction.title)
                     .font(.body)
-                if let cat = transaction.category {
-                    Text("\(cat.icon) \(cat.name)")
+
+                if let name = transaction.resolvedCategoryName {
+                    let icon = transaction.resolvedCategoryIcon ?? "📌"
+                    Text("\(icon) \(name)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

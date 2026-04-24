@@ -57,6 +57,7 @@ struct ContentView: View {
             syncFromQueries()
         }
 
+        transactionVM.detachCategoryRelations(context: context)
         transactionVM.generateDueRecurringTransactions(context: context)
         budgetVM.ensureRecurringBudgetForCurrentMonth(context: context, transactions: transactionVM.transactions, rates: currencyService.rates)
 

@@ -6,6 +6,9 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(SettingsViewModel.self) private var settingsVM
     @Environment(CurrencyService.self) private var currencyService
+    @Environment(SecurityService.self) private var securityService
+
+    @State private var keyRotationResultMessage: String?
 
     private let accentColors: [(name: String, hex: String)] = [
         ("Vert", "27AE60"),
@@ -100,6 +103,19 @@ struct SettingsView: View {
                             get: { settings.dataEncryptionEnabled },
                             set: { settings.dataEncryptionEnabled = $0; settingsVM.save(context: context) }
                         ))
+
+                        Button("Rotation de la clé de chiffrement") {
+                            let result = settingsVM.rotateEncryptionKey(context: context, securityService: securityService)
+                            keyRotationResultMessage = result.rotated
+                                ? "Clé renouvelée, \(result.reencryptedCount) note(s) rechiffrée(s)."
+                                : "Rotation impossible."
+                        }
+
+                        if let keyRotationResultMessage {
+                            Text(keyRotationResultMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
                         if settings.faceIDEnabled {
                             Section("Protection par onglet") {

@@ -18,7 +18,10 @@ final class TransactionViewModel {
             date: transaction.date,
             currency: transaction.currency,
             type: transaction.type,
-            category: transaction.category,
+            category: nil,
+            categoryNameSnapshot: transaction.categoryNameSnapshot,
+            categoryIconSnapshot: transaction.categoryIconSnapshot,
+            categoryColorHexSnapshot: transaction.categoryColorHexSnapshot,
             note: transaction.note,
             noteCiphertext: transaction.noteCiphertext,
             noteHash: transaction.noteHash,
@@ -46,7 +49,10 @@ final class TransactionViewModel {
                     date: dueDate,
                     currency: template.currency,
                     type: template.type,
-                    category: template.category,
+                    category: nil,
+                    categoryNameSnapshot: template.categoryNameSnapshot,
+                    categoryIconSnapshot: template.categoryIconSnapshot,
+                    categoryColorHexSnapshot: template.categoryColorHexSnapshot,
                     note: template.note,
                     noteCiphertext: template.noteCiphertext,
                     noteHash: template.noteHash,
@@ -66,6 +72,15 @@ final class TransactionViewModel {
     func delete(transaction: Transaction, context: ModelContext) {
         context.delete(transaction)
         try? context.save()
+    }
+
+    func detachCategoryRelations(context: ModelContext) {
+        if let transactions = try? context.fetch(FetchDescriptor<Transaction>()) {
+            for transaction in transactions {
+                transaction.category = nil
+            }
+            try? context.save()
+        }
     }
 
     func transactions(for month: Date) -> [Transaction] {

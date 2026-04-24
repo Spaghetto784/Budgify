@@ -8,32 +8,46 @@ final class SecurityService {
     private let keychainAccount = "budgify.symmetric.key.v1"
 
     func hash(_ text: String) -> String {
-        let digest = SHA256.hash(data: Data(text.utf8))
+        hash(data: Data(text.utf8))
+    }
+
+    func hash(data: Data) -> String {
+        let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     func encrypt(_ plaintext: String) -> String? {
         guard let data = plaintext.data(using: .utf8) else { return nil }
+        return encrypt(data: data)?.base64EncodedString()
+    }
 
+    func decrypt(_ payloadBase64: String) -> String? {
+        guard let data = Data(base64Encoded: payloadBase64), let decrypted = decrypt(data: data) else { return nil }
+        return String(data: decrypted, encoding: .utf8)
+    }
+
+    func encrypt(data: Data) -> Data? {
         do {
             let box = try AES.GCM.seal(data, using: try key())
-            guard let combined = box.combined else { return nil }
-            return combined.base64EncodedString()
+            return box.combined
         } catch {
             return nil
         }
     }
 
-    func decrypt(_ payloadBase64: String) -> String? {
-        guard let data = Data(base64Encoded: payloadBase64) else { return nil }
-
+    func decrypt(data: Data) -> Data? {
         do {
             let box = try AES.GCM.SealedBox(combined: data)
-            let decrypted = try AES.GCM.open(box, using: try key())
-            return String(data: decrypted, encoding: .utf8)
+            return try AES.GCM.open(box, using: try key())
         } catch {
             return nil
         }
+    }
+
+    func rotateKey() {
+        let newKey = SymmetricKey(size: .bits256)
+        let data = newKey.withUnsafeBytes { Data($0) }
+        saveKeyDataToKeychain(data)
     }
 
     private func key() throws -> SymmetricKey {

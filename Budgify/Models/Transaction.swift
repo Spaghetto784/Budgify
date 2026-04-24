@@ -20,6 +20,9 @@ final class Transaction {
     var currency: String
     var type: TransactionType
     var category: Category?
+    var categoryNameSnapshot: String?
+    var categoryIconSnapshot: String?
+    var categoryColorHexSnapshot: String?
     var note: String
     var noteCiphertext: String?
     var noteHash: String?
@@ -35,6 +38,9 @@ final class Transaction {
         currency: String = "EUR",
         type: TransactionType,
         category: Category? = nil,
+        categoryNameSnapshot: String? = nil,
+        categoryIconSnapshot: String? = nil,
+        categoryColorHexSnapshot: String? = nil,
         note: String = "",
         noteCiphertext: String? = nil,
         noteHash: String? = nil,
@@ -49,6 +55,9 @@ final class Transaction {
         self.currency = currency
         self.type = type
         self.category = category
+        self.categoryNameSnapshot = categoryNameSnapshot ?? category?.name
+        self.categoryIconSnapshot = categoryIconSnapshot ?? category?.icon
+        self.categoryColorHexSnapshot = categoryColorHexSnapshot ?? category?.colorHex
         self.note = note
         self.noteCiphertext = noteCiphertext
         self.noteHash = noteHash
@@ -61,5 +70,17 @@ final class Transaction {
     var recurrenceFrequency: RecurrenceFrequency? {
         guard let recurrenceFrequencyRaw else { return nil }
         return RecurrenceFrequency(rawValue: recurrenceFrequencyRaw)
+    }
+
+    var resolvedCategoryName: String? {
+        categoryNameSnapshot
+    }
+
+    var resolvedCategoryIcon: String? {
+        categoryIconSnapshot
+    }
+
+    var resolvedCategoryColorHex: String? {
+        categoryColorHexSnapshot
     }
 }

@@ -14,6 +14,25 @@ final class CategoryClassifier {
     private let exactKey = "classifier.learnedExactMatches.v1"
     private let keywordKey = "classifier.learnedKeywordScores.v1"
 
+    private let transportKeywords: Set<String> = [
+        "uber", "taxi", "bolt", "sncf", "train", "metro", "ratp", "navigo", "bus", "tram",
+        "avion", "vol", "air", "airport", "ouigo", "thalys", "transilien", "blablacar", "parking",
+        "essence", "peage", "autoroute", "gare", "rer", "velib", "scooter"
+    ]
+
+    private let foodKeywords: Set<String> = [
+        "eats", "deliveroo", "restaurant", "sushi", "pizza", "burger", "mcdonalds", "carrefour",
+        "supermarche", "courses", "monoprix", "lidl", "aldi", "franprix", "boulangerie", "starbucks", "cafe"
+    ]
+
+    private let transportPhrases: [String] = [
+        "uber avion", "uber airport", "uber vol", "uber gare", "uber train"
+    ]
+
+    private let foodPhrases: [String] = [
+        "uber eats", "just eat"
+    ]
+
     init() {
         loadModel()
         loadLearnedData()
@@ -40,8 +59,16 @@ final class CategoryClassifier {
             return exact
         }
 
-        if let voted = predictedFromLearnedKeywords(cleaned) {
-            return voted
+        if let strongLearned = predictedFromLearnedKeywords(cleaned, minimumScore: 3, minimumGap: 1) {
+            return strongLearned
+        }
+
+        if let heuristic = predictedFromHeuristics(cleaned) {
+            return heuristic
+        }
+
+        if let learned = predictedFromLearnedKeywords(cleaned, minimumScore: 1, minimumGap: 0) {
+            return learned
         }
 
         return model?.predictedLabel(for: cleaned)
@@ -69,7 +96,7 @@ final class CategoryClassifier {
 
         for token in tokens(from: cleaned) {
             var scoreByCategory = learnedKeywordScores[token, default: [:]]
-            scoreByCategory[categoryName, default: 0] += 1
+            scoreByCategory[categoryName, default: 0] += 3
             learnedKeywordScores[token] = scoreByCategory
         }
 
@@ -83,9 +110,9 @@ final class CategoryClassifier {
         for token in tokens(from: cleaned) {
             var scoreByCategory = learnedKeywordScores[token, default: [:]]
             if let previous = scoreByCategory[predicted], previous > 0 {
-                scoreByCategory[predicted] = previous - 1
+                scoreByCategory[predicted] = max(previous - 2, 0)
             }
-            scoreByCategory[actual, default: 0] += 2
+            scoreByCategory[actual, default: 0] += 5
             learnedKeywordScores[token] = scoreByCategory
         }
 
@@ -93,7 +120,31 @@ final class CategoryClassifier {
         persistLearnedData()
     }
 
-    private func predictedFromLearnedKeywords(_ cleaned: String) -> String? {
+    private func predictedFromHeuristics(_ cleaned: String) -> String? {
+        for phrase in foodPhrases where cleaned.contains(phrase) {
+            return "Nourriture"
+        }
+
+        for phrase in transportPhrases where cleaned.contains(phrase) {
+            return "Transport"
+        }
+
+        let tokenSet = Set(tokens(from: cleaned))
+        let transportHits = tokenSet.intersection(transportKeywords).count
+        let foodHits = tokenSet.intersection(foodKeywords).count
+
+        if transportHits >= 1, transportHits > foodHits {
+            return "Transport"
+        }
+
+        if foodHits >= 2, foodHits >= transportHits {
+            return "Nourriture"
+        }
+
+        return nil
+    }
+
+    private func predictedFromLearnedKeywords(_ cleaned: String, minimumScore: Int, minimumGap: Int) -> String? {
         var aggregate: [String: Int] = [:]
 
         for token in tokens(from: cleaned) {
@@ -103,7 +154,16 @@ final class CategoryClassifier {
             }
         }
 
-        return aggregate.max(by: { $0.value < $1.value })?.key
+        guard let best = aggregate.max(by: { $0.value < $1.value }) else {
+            return nil
+        }
+
+        let sortedScores = aggregate.values.sorted(by: >)
+        let secondBest = sortedScores.dropFirst().first ?? 0
+        let gap = best.value - secondBest
+
+        guard best.value >= minimumScore, gap >= minimumGap else { return nil }
+        return best.key
     }
 
     private func tokens(from text: String) -> [String] {
@@ -115,6 +175,7 @@ final class CategoryClassifier {
 
     private func clean(_ text: String) -> String {
         text.lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .components(separatedBy: .punctuationCharacters)
             .joined(separator: " ")

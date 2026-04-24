@@ -64,8 +64,8 @@ struct TransactionDetailView: View {
         List {
             Section {
                 HStack {
-                    if let cat = transaction.category {
-                        Text(cat.icon).font(.largeTitle)
+                    if let icon = transaction.resolvedCategoryIcon {
+                        Text(icon).font(.largeTitle)
                     }
                     VStack(alignment: .leading) {
                         Text(transaction.title).font(.title3.bold())
@@ -110,15 +110,17 @@ struct TransactionDetailView: View {
                 }
             }
 
-            if let cat = transaction.category {
+            if let name = transaction.resolvedCategoryName {
                 Section("Catégorie") {
                     HStack {
-                        Text(cat.icon)
-                        Text(cat.name)
+                        Text(transaction.resolvedCategoryIcon ?? "📌")
+                        Text(name)
                         Spacer()
-                        Circle()
-                            .fill(Color(hex: cat.colorHex))
-                            .frame(width: 16, height: 16)
+                        if let colorHex = transaction.resolvedCategoryColorHex {
+                            Circle()
+                                .fill(Color(hex: colorHex))
+                                .frame(width: 16, height: 16)
+                        }
                     }
                 }
             }

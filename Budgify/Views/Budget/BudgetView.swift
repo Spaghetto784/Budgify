@@ -143,8 +143,8 @@ struct BudgetView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(t.title).font(.body)
-                                    if let cat = t.category {
-                                        Text("\(cat.icon) \(cat.name)")
+                                    if let name = t.resolvedCategoryName {
+                                        Text("\(t.resolvedCategoryIcon ?? "📌") \(name)")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }

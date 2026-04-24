@@ -27,7 +27,7 @@ struct StatsView: View {
     private var byCategory: [(name: String, icon: String, total: Double, color: String)] {
         categories.compactMap { cat in
             let total = monthTransactions
-                .filter { $0.type == .expense && $0.category?.id == cat.id }
+                .filter { $0.type == .expense && $0.resolvedCategoryName == cat.name }
                 .reduce(0.0) { acc, t in
                     acc + transactionVM.converted(amount: t.amount, from: t.currency, to: selectedCurrency, rates: currencyService.rates)
                 }

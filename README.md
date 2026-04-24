@@ -1,67 +1,87 @@
 # Budgify
 
-Personal budget tracker for iOS built with SwiftUI, SwiftData & Swift Charts.
-
-## Features
-
-- Track expenses by category
-- Set monthly budgets with progress tracking
-- Visualize spending with native charts (Swift Charts)
-- Multi-currency support (EUR & THB)
-- Real-time exchange rates via ExchangeRate API
+Budgify is an iOS personal finance app built with SwiftUI + SwiftData.
+It focuses on practical budgeting, multi-currency tracking, local intelligence, and strong on-device privacy.
 
 ## Tech Stack
 
-- Swift 5.9+
 - SwiftUI
 - SwiftData
-- Swift Charts
-- iOS 17+
+- LocalAuthentication (Face ID / Touch ID)
+- UserNotifications
+- CryptoKit + Keychain
+- NaturalLanguage/CoreML
 
-## APIs & Services
+## Current Features
 
-- [ExchangeRate API](https://exchangerate-api.com) — live EUR/THB conversion
+### Transactions & Budgeting
+- Expense / income / loan tracking
+- Monthly budgets with progress monitoring
+- Recurring monthly budgets
+- Optional rollover of unused budget to next month
+- Recurring transactions (weekly/monthly)
+
+### Categories & ML
+- Automatic category suggestion
+- Local adaptive learning from user corrections
+- Stronger disambiguation rules for ambiguous terms (e.g. transport vs food)
+- No external AI service dependency for categorization
+
+### Multi-Currency
+- Popular-currency support with symbols/flags
+- User-selectable list of active currencies
+- Conversion in list/detail/stats flows
+
+### Savings
+- Savings accounts
+- Savings goals with progress tracking
+- Weekly recommended contribution for goals with deadlines
+
+### Security & Privacy
+- App/tab protection with Face ID / Touch ID
+- Optional AES-GCM encryption for sensitive notes
+- SHA-256 integrity verification
+- Encryption key stored in Keychain
+- Encryption key rotation with re-encryption of existing notes
+
+### Data Reliability
+- SwiftData store persisted at explicit Application Support path
+- Versioned schema + migration plan scaffold
+- Encrypted local backup snapshot
+- Automatic restore when local store is empty
+
+### Export
+- Monthly expenses PDF export from Transactions
+- Clean, minimal report style with sharing support
+
+## Project Structure
+
+- `Budgify/Models/` data models + schema/migration files
+- `Budgify/ViewModels/` business logic
+- `Budgify/Services/` currency, ML, security, backup, PDF export
+- `Budgify/Views/` feature views by domain
 
 ## Roadmap
 
-- [ ] iOS Widgets (WidgetKit) — budget remaining on home screen
-- [ ] Push notifications — low balance alerts, end of month reminders
-- [ ] Search & filters in expense list
-- [ ] Export to CSV / PDF
-- [ ] iCloud sync (CloudKit)
-- [ ] Apple Watch app
-- [ ] Siri Shortcuts
+### Near Term
+- Harden SwiftData migration stages with explicit data migration tests
+- Extend encryption beyond notes to more sensitive fields
+- Improve PDF layout (branding, pagination footer, summary blocks)
+- Add internal quality tests for migration, encrypted restore, and ML edge cases
 
-## Getting Started
+### Mid Term
+- Cloud sync strategy (CloudKit)
+- Conflict handling and offline-first synchronization improvements
+- Advanced analytics and anomaly detection in stats
 
-1. Clone the repo
-2. Open `Budgify.xcodeproj` in Xcode 15+
-3. Add your ExchangeRate API key in `Services/CurrencyService.swift`
-4. Run on device or simulator (iOS 17+)
+## Build & Run
 
-## Structure
+1. Open the Xcode project
+2. Select an iOS simulator/device
+3. Build and run
 
-```
-Budgify/
-├── Models/
-│   ├── Expense.swift
-│   ├── Category.swift
-│   └── Budget.swift
-├── Services/
-│   └── CurrencyService.swift
-├── ViewModels/
-│   ├── ExpenseViewModel.swift
-│   ├── BudgetViewModel.swift
-│   └── CategoryViewModel.swift
-├── Views/
-│   ├── Expenses/
-│   ├── Budget/
-│   ├── Stats/
-│   └── Categories/
-└── Extensions/
-    └── Color+Hex.swift
-```
+## Notes
 
-## License
-
-MIT
+- All sensitive logic is designed to run on-device.
+- Backup is encrypted before being written to disk.
+- ML adaptation is local and transparent to user workflow.
