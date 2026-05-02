@@ -12,6 +12,7 @@ struct SavingsView: View {
     @State private var selectedCurrency = "EUR"
     @State private var showAddAccount = false
     @State private var showAddGoal = false
+    @State private var showTransfer = false
 
     private var symbol: String { currencyService.symbol(for: selectedCurrency) }
     private var totalWorth: Double { savingsVM.totalWorth(in: selectedCurrency, rates: currencyService.rates) }
@@ -50,7 +51,7 @@ struct SavingsView: View {
                             Text(account.icon).font(.title2)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(account.name).font(.body)
-                                Text(account.currency)
+                                Text("\(account.accountType.label) • \(account.currency)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -66,8 +67,12 @@ struct SavingsView: View {
                 Button { showAddAccount = true } label: {
                     Label("Ajouter un compte", systemImage: "plus.circle")
                 }
+                Button { showTransfer = true } label: {
+                    Label("Virement entre comptes", systemImage: "arrow.left.arrow.right.circle")
+                }
+                .disabled(accounts.count < 2)
             } header: {
-                Text("Comptes épargne")
+                Text("Comptes")
             }
 
             Section("Objectifs") {
@@ -130,6 +135,9 @@ struct SavingsView: View {
         }
         .sheet(isPresented: $showAddGoal) {
             AddSavingsGoalView()
+        }
+        .sheet(isPresented: $showTransfer) {
+            TransferFundsView()
         }
     }
 }

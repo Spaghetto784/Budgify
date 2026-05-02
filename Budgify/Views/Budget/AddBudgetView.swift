@@ -11,7 +11,8 @@ struct AddBudgetView: View {
     @State private var name = ""
     @State private var limit = ""
     @State private var currency = "EUR"
-    @State private var month = Date.now
+    @State private var startDate = Date.now
+    @State private var endDate = Calendar.current.date(byAdding: .day, value: 30, to: .now) ?? .now
     @State private var isRecurringMonthly = false
     @State private var rolloverUnusedAmount = false
 
@@ -24,7 +25,8 @@ struct AddBudgetView: View {
             Form {
                 Section {
                     TextField("Nom (optionnel)", text: $name)
-                    DatePicker("Mois", selection: $month, displayedComponents: [.date])
+                    DatePicker("Date de début", selection: $startDate, displayedComponents: [.date])
+                    DatePicker("Date de fin", selection: $endDate, in: startDate..., displayedComponents: [.date])
                     TextField("Limite de dépenses", text: $limit)
                         .keyboardType(.decimalPad)
                     Picker("Devise", selection: $currency) {
@@ -37,7 +39,7 @@ struct AddBudgetView: View {
                 Section("Automatisation") {
                     Toggle("Budget récurrent mensuel", isOn: $isRecurringMonthly)
                     if isRecurringMonthly {
-                        Toggle("Reporter le restant sur le mois suivant", isOn: $rolloverUnusedAmount)
+                        Toggle("Reporter le restant sur la période suivante", isOn: $rolloverUnusedAmount)
                     }
                 }
             }
@@ -49,7 +51,7 @@ struct AddBudgetView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Créer") { save() }
-                        .disabled(Double(limit) == nil)
+                        .disabled(NumberParsing.parseDouble(limit) == nil || endDate < startDate)
                 }
             }
             .onAppear {
@@ -59,9 +61,11 @@ struct AddBudgetView: View {
     }
 
     private func save() {
-        guard let lmt = Double(limit) else { return }
+        guard let lmt = NumberParsing.parseDouble(limit) else { return }
         let budget = Budget(
-            month: month,
+            month: startDate,
+            startDate: startDate,
+            endDate: endDate,
             limit: lmt,
             currency: currency,
             name: name,

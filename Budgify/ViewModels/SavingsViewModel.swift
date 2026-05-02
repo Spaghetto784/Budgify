@@ -24,6 +24,34 @@ final class SavingsViewModel {
         try? context.save()
     }
 
+    func transfer(
+        from source: SavingsAccount,
+        to destination: SavingsAccount,
+        amount: Double,
+        currencyService: CurrencyService,
+        context: ModelContext
+    ) {
+        guard amount > 0, source.id != destination.id else { return }
+        let sourceAmount = amount
+        let destinationAmount = currencyService.convert(amount: amount, from: source.currency, to: destination.currency)
+
+        let sourceNewBalance = source.balance - sourceAmount
+        let destinationNewBalance = destination.balance + destinationAmount
+
+        updateBalance(
+            account: source,
+            newBalance: sourceNewBalance,
+            note: "Virement vers \(destination.name): -\(sourceAmount.formatted(.number.precision(.fractionLength(2)))) \(source.currency)",
+            context: context
+        )
+        updateBalance(
+            account: destination,
+            newBalance: destinationNewBalance,
+            note: "Virement depuis \(source.name): +\(destinationAmount.formatted(.number.precision(.fractionLength(2)))) \(destination.currency)",
+            context: context
+        )
+    }
+
     func addGoal(goal: SavingsGoal, context: ModelContext) {
         context.insert(goal)
         try? context.save()

@@ -91,8 +91,24 @@ final class TransactionViewModel {
         }
     }
 
+    func transactions(from startDate: Date, to endDate: Date) -> [Transaction] {
+        let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        return transactions.filter {
+            !$0.isRecurringTemplate &&
+            $0.date >= startDate && $0.date <= endOfDay
+        }
+    }
+
     func total(type: TransactionType, for month: Date, in currency: String, rates: [String: Double]) -> Double {
         transactions(for: month)
+            .filter { $0.type == type }
+            .reduce(0) { acc, t in
+                acc + converted(amount: t.amount, from: t.currency, to: currency, rates: rates)
+            }
+    }
+
+    func total(type: TransactionType, from startDate: Date, to endDate: Date, in currency: String, rates: [String: Double]) -> Double {
+        transactions(from: startDate, to: endDate)
             .filter { $0.type == type }
             .reduce(0) { acc, t in
                 acc + converted(amount: t.amount, from: t.currency, to: currency, rates: rates)

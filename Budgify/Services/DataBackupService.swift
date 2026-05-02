@@ -44,6 +44,8 @@ final class DataBackupService {
 
     private struct BudgetSnapshot: Codable {
         var month: Date
+        var startDate: Date
+        var endDate: Date
         var limit: Double
         var currency: String
         var name: String
@@ -137,6 +139,8 @@ final class DataBackupService {
             budgets: budgets.map {
                 .init(
                     month: $0.month,
+                    startDate: $0.startDate,
+                    endDate: $0.endDate,
                     limit: $0.limit,
                     currency: $0.currency,
                     name: $0.name,
@@ -259,6 +263,8 @@ final class DataBackupService {
             for budget in snapshot.budgets {
                 let model = Budget(
                     month: budget.month,
+                    startDate: budget.startDate,
+                    endDate: budget.endDate,
                     limit: budget.limit,
                     currency: budget.currency,
                     name: budget.name,

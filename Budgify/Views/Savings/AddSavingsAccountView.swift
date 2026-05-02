@@ -12,6 +12,7 @@ struct AddSavingsAccountView: View {
     @State private var balance = ""
     @State private var currency = "EUR"
     @State private var icon = "🏦"
+    @State private var accountType: AccountType = .bank
 
     private let icons = ["🏦", "💰", "🐖", "📈", "🏠", "✈️", "🎓", "💎"]
 
@@ -26,6 +27,11 @@ struct AddSavingsAccountView: View {
                     TextField("Nom du compte", text: $name)
                     TextField("Solde initial", text: $balance)
                         .keyboardType(.decimalPad)
+                    Picker("Type de compte", selection: $accountType) {
+                        ForEach(AccountType.allCases) { type in
+                            Text(type.label).tag(type)
+                        }
+                    }
                     Picker("Devise", selection: $currency) {
                         ForEach(displayCurrencies, id: \.self) { code in
                             Text(currencyService.displayLabel(for: code)).tag(code)
@@ -54,7 +60,7 @@ struct AddSavingsAccountView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Créer") { save() }
-                        .disabled(name.isEmpty || Double(balance) == nil)
+                        .disabled(name.isEmpty || NumberParsing.parseDouble(balance) == nil)
                 }
             }
             .onAppear {
@@ -64,8 +70,8 @@ struct AddSavingsAccountView: View {
     }
 
     private func save() {
-        guard let bal = Double(balance) else { return }
-        savingsVM.addAccount(account: SavingsAccount(name: name, balance: bal, currency: currency, icon: icon), context: context)
+        guard let bal = NumberParsing.parseDouble(balance) else { return }
+        savingsVM.addAccount(account: SavingsAccount(name: name, balance: bal, currency: currency, icon: icon, accountType: accountType), context: context)
         dismiss()
     }
 }

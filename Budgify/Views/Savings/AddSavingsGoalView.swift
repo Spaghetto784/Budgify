@@ -23,8 +23,8 @@ struct AddSavingsGoalView: View {
     }
 
     private var weeklyNeededPreview: Double? {
-        guard hasDeadline, let tgt = Double(target) else { return nil }
-        let cur = Double(current) ?? 0
+        guard hasDeadline, let tgt = NumberParsing.parseDouble(target) else { return nil }
+        let cur = NumberParsing.parseDouble(current) ?? 0
         let previewGoal = SavingsGoal(name: "", target: tgt, current: cur, currency: currency, deadline: deadline, icon: icon)
         return savingsVM.recommendedWeeklyContribution(for: previewGoal)
     }
@@ -83,7 +83,7 @@ struct AddSavingsGoalView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Créer") { save() }
-                        .disabled(name.isEmpty || Double(target) == nil)
+                        .disabled(name.isEmpty || NumberParsing.parseDouble(target) == nil)
                 }
             }
             .onAppear {
@@ -93,8 +93,8 @@ struct AddSavingsGoalView: View {
     }
 
     private func save() {
-        guard let tgt = Double(target) else { return }
-        let cur = Double(current) ?? 0
+        guard let tgt = NumberParsing.parseDouble(target) else { return }
+        let cur = NumberParsing.parseDouble(current) ?? 0
         let goal = SavingsGoal(name: name, target: tgt, current: cur, currency: currency, deadline: hasDeadline ? deadline : nil, icon: icon)
         savingsVM.addGoal(goal: goal, context: context)
         dismiss()

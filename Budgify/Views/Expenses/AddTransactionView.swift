@@ -10,7 +10,9 @@ struct AddTransactionView: View {
     @Environment(CategoryViewModel.self) private var categoryVM
     @Environment(SettingsViewModel.self) private var settingsVM
     @Environment(SecurityService.self) private var securityService
+    @Environment(SavingsViewModel.self) private var savingsVM
     @Query private var categories: [Category]
+    @Query private var savingsAccounts: [SavingsAccount]
 
     @State private var title = ""
     @State private var amount = ""
@@ -22,6 +24,8 @@ struct AddTransactionView: View {
     @State private var suggestedCategory: Category?
     @State private var isRecurring = false
     @State private var recurrenceFrequency: RecurrenceFrequency = .monthly
+    @State private var linkToSavings = false
+    @State private var selectedSavingsAccount: SavingsAccount?
 
     private var displayCurrencies: [String] {
         settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
@@ -62,6 +66,24 @@ struct AddTransactionView: View {
                         Picker("Fréquence", selection: $recurrenceFrequency) {
                             Text("Hebdomadaire").tag(RecurrenceFrequency.weekly)
                             Text("Mensuelle").tag(RecurrenceFrequency.monthly)
+                        }
+                    }
+                }
+
+                Section("Compte d'épargne") {
+                    Toggle("Affecter cette transaction à un compte", isOn: $linkToSavings)
+                    if linkToSavings {
+                        if savingsAccounts.isEmpty {
+                            Text("Aucun compte d'épargne disponible")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Picker("Compte", selection: $selectedSavingsAccount) {
+                                Text("Sélectionner un compte").tag(Optional<SavingsAccount>.none)
+                                ForEach(savingsAccounts) { account in
+                                    Text("\(account.icon) \(account.name) (\(account.currency))")
+                                        .tag(Optional(account))
+                                }
+                            }
                         }
                     }
                 }
@@ -160,16 +182,17 @@ struct AddTransactionView: View {
             }
             .onAppear {
                 currency = displayCurrencies.first ?? "EUR"
+                selectedSavingsAccount = savingsAccounts.first
             }
         }
     }
 
     private var isValid: Bool {
-        !title.isEmpty && Double(amount) != nil
+        !title.isEmpty && NumberParsing.parseDouble(amount) != nil
     }
 
     private func save() {
-        guard let amt = Double(amount) else { return }
+        guard let amt = NumberParsing.parseDouble(amount) else { return }
 
         let shouldEncrypt = settingsVM.settings?.dataEncryptionEnabled == true
         let noteHash = note.isEmpty ? nil : securityService.hash(note)
@@ -192,6 +215,30 @@ struct AddTransactionView: View {
         )
 
         transactionVM.add(transaction: transaction, context: context)
+
+        if linkToSavings, let account = selectedSavingsAccount {
+            let convertedAmount = transactionVM.converted(
+                amount: amt,
+                from: currency,
+                to: account.currency,
+                rates: currencyService.rates
+            )
+            let signedDelta: Double
+            switch type {
+            case .expense:
+                signedDelta = -convertedAmount
+            case .income:
+                signedDelta = convertedAmount
+            case .loan:
+                signedDelta = 0
+            }
+            if signedDelta != 0 {
+                let newBalance = account.balance + signedDelta
+                let impact = signedDelta > 0 ? "+" : "-"
+                let note = "\(impact)\(abs(convertedAmount).formatted(.number.precision(.fractionLength(2)))) \(account.currency) via \(title)"
+                savingsVM.updateBalance(account: account, newBalance: newBalance, note: note, context: context)
+            }
+        }
 
         if type == .expense, let selectedCategory {
             classifier.addTrainingSample(title: title, categoryName: selectedCategory.name)

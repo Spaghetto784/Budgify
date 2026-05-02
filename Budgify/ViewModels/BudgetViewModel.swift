@@ -26,36 +26,41 @@ final class BudgetViewModel {
         try? context.save()
     }
 
-    func budget(for month: Date) -> Budget? {
-        let calendar = Calendar.current
+    func budget(containing date: Date) -> Budget? {
+        let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: date) ?? date
         return budgets.first {
-            calendar.isDate($0.month, equalTo: month, toGranularity: .month)
+            $0.startDate <= endOfDay && $0.endDate >= date
         }
     }
 
     func ensureRecurringBudgetForCurrentMonth(context: ModelContext, transactions: [Transaction], rates: [String: Double], now: Date = .now) {
         let calendar = Calendar.current
-        let currentMonth = startOfMonth(for: now)
-        guard budget(for: currentMonth) == nil else { return }
+        let currentMonthStart = startOfMonth(for: now)
+        guard budget(containing: currentMonthStart) == nil else { return }
 
         guard
-            let previousMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth),
-            let previousBudget = budget(for: previousMonth),
+            let previousMonthStart = calendar.date(byAdding: .month, value: -1, to: currentMonthStart),
+            let previousBudget = budget(containing: previousMonthStart),
             previousBudget.isRecurringMonthly
         else {
             return
         }
 
+        let newStart = currentMonthStart
+        let newEnd = calendar.date(byAdding: .day, value: -1, to: calendar.date(byAdding: .month, value: 1, to: newStart) ?? newStart) ?? newStart
+
         let rollover: Double
         if previousBudget.rolloverUnusedAmount {
-            let spent = expensesTotal(for: previousMonth, in: previousBudget.currency, transactions: transactions, rates: rates)
+            let spent = expensesTotal(from: previousBudget.startDate, to: previousBudget.endDate, in: previousBudget.currency, transactions: transactions, rates: rates)
             rollover = max(previousBudget.limit - spent, 0)
         } else {
             rollover = 0
         }
 
         let newBudget = Budget(
-            month: currentMonth,
+            month: newStart,
+            startDate: newStart,
+            endDate: newEnd,
             limit: previousBudget.limit + rollover,
             currency: previousBudget.currency,
             name: previousBudget.name,
@@ -89,32 +94,29 @@ final class BudgetViewModel {
         }
     }
 
-    func projectedOverrunInDays(for budget: Budget, spent: Double, month: Date, now: Date = .now) -> Int? {
-        let calendar = Calendar.current
-        guard calendar.isDate(month, equalTo: now, toGranularity: .month) else { return nil }
+    func projectedOverrunInDays(for budget: Budget, spent: Double, now: Date = .now) -> Int? {
         guard budget.limit > 0, spent > 0 else { return nil }
+        guard now >= budget.startDate && now <= budget.endDate else { return nil }
 
-        let day = calendar.component(.day, from: now)
-        let daysRange = calendar.range(of: .day, in: .month, for: now)
-        let daysInMonth = daysRange?.count ?? 30
-        guard day > 0 else { return nil }
+        let calendar = Calendar.current
+        let elapsedDays = max((calendar.dateComponents([.day], from: budget.startDate, to: now).day ?? 0) + 1, 1)
+        let remainingDays = max(calendar.dateComponents([.day], from: now, to: budget.endDate).day ?? 0, 0)
 
-        let dailyRate = spent / Double(day)
+        let dailyRate = spent / Double(elapsedDays)
         guard dailyRate > 0 else { return nil }
 
-        let remaining = budget.limit - spent
-        if remaining <= 0 { return 0 }
+        let remainingBudget = budget.limit - spent
+        if remainingBudget <= 0 { return 0 }
 
-        let daysUntilOverrun = Int(ceil(remaining / dailyRate))
-        return day + daysUntilOverrun <= daysInMonth ? daysUntilOverrun : nil
+        let daysUntilOverrun = Int(ceil(remainingBudget / dailyRate))
+        return daysUntilOverrun <= remainingDays ? daysUntilOverrun : nil
     }
 
-    func notifyIfNeeded(for budget: Budget, spent: Double, month: Date) {
-        let calendar = Calendar.current
-        guard calendar.isDate(month, equalTo: Date.now, toGranularity: .month) else { return }
+    func notifyIfNeeded(for budget: Budget, spent: Double, now: Date = .now) {
+        guard now >= budget.startDate && now <= budget.endDate else { return }
         guard let level = alertLevel(for: budget, spent: spent), let body = alertMessage(for: budget, spent: spent) else { return }
 
-        let key = alertIdentifier(for: month, level: level)
+        let key = alertIdentifier(for: budget, level: level)
         guard !sentAlertIdentifiers.contains(key) else { return }
 
         let content = UNMutableNotificationContent()
@@ -128,21 +130,21 @@ final class BudgetViewModel {
         sentAlertIdentifiers.insert(key)
     }
 
-    private func alertIdentifier(for month: Date, level: BudgetAlertLevel) -> String {
+    private func alertIdentifier(for budget: Budget, level: BudgetAlertLevel) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let monthKey = formatter.string(from: month)
+        formatter.dateFormat = "yyyy-MM-dd"
+        let key = "\(formatter.string(from: budget.startDate))_\(formatter.string(from: budget.endDate))"
         let levelKey = level == .warning ? "warning" : "exceeded"
-        return "budget-alert-\(monthKey)-\(levelKey)"
+        return "budget-alert-\(key)-\(levelKey)"
     }
 
-    private func expensesTotal(for month: Date, in currency: String, transactions: [Transaction], rates: [String: Double]) -> Double {
-        let calendar = Calendar.current
+    private func expensesTotal(from startDate: Date, to endDate: Date, in currency: String, transactions: [Transaction], rates: [String: Double]) -> Double {
+        let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
         return transactions
             .filter {
                 !$0.isRecurringTemplate &&
                 $0.type == .expense &&
-                calendar.isDate($0.date, equalTo: month, toGranularity: .month)
+                $0.date >= startDate && $0.date <= endOfDay
             }
             .reduce(0) { partial, transaction in
                 partial + converted(amount: transaction.amount, from: transaction.currency, to: currency, rates: rates)

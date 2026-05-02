@@ -4,6 +4,8 @@ import Foundation
 @Model
 final class Budget {
     var month: Date
+    var startDate: Date
+    var endDate: Date
     var limit: Double
     var currency: String
     var name: String
@@ -13,6 +15,8 @@ final class Budget {
 
     init(
         month: Date,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
         limit: Double,
         currency: String = "EUR",
         name: String = "",
@@ -20,7 +24,13 @@ final class Budget {
         rolloverUnusedAmount: Bool = false,
         rolloverFromPreviousMonth: Double = 0
     ) {
-        self.month = month
+        let calendar = Calendar.current
+        let periodStart = startDate ?? calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let periodEnd = endDate ?? calendar.date(byAdding: .day, value: -1, to: calendar.date(byAdding: .month, value: 1, to: periodStart) ?? periodStart) ?? periodStart
+
+        self.month = periodStart
+        self.startDate = periodStart
+        self.endDate = max(periodStart, periodEnd)
         self.limit = limit
         self.currency = currency
         self.name = name

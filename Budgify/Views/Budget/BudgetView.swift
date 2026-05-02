@@ -9,19 +9,21 @@ struct BudgetView: View {
     @Environment(SettingsViewModel.self) private var settingsVM
     @Query private var budgets: [Budget]
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
-    @State private var selectedMonth = Date.now
+    @State private var selectedDate = Date.now
     @State private var showAdd = false
 
-    private var currentBudget: Budget? { budgetVM.budget(for: selectedMonth) }
+    private var currentBudget: Budget? { budgetVM.budget(containing: selectedDate) }
     private var symbol: String { currentBudget.map { currencyService.symbol(for: $0.currency) } ?? "€" }
     private var currency: String { currentBudget?.currency ?? "EUR" }
 
     private var spent: Double {
-        transactionVM.total(type: .expense, for: selectedMonth, in: currency, rates: currencyService.rates)
+        guard let budget = currentBudget else { return 0 }
+        return transactionVM.total(type: .expense, from: budget.startDate, to: budget.endDate, in: currency, rates: currencyService.rates)
     }
 
     private var income: Double {
-        transactionVM.total(type: .income, for: selectedMonth, in: currency, rates: currencyService.rates)
+        guard let budget = currentBudget else { return 0 }
+        return transactionVM.total(type: .income, from: budget.startDate, to: budget.endDate, in: currency, rates: currencyService.rates)
     }
 
     private var remaining: Double { (currentBudget?.limit ?? 0) - spent }
@@ -31,8 +33,9 @@ struct BudgetView: View {
         return min(spent / limit, 1.0)
     }
 
-    private var monthTransactions: [Transaction] {
-        transactionVM.transactions(for: selectedMonth).filter { $0.type == .expense }
+    private var periodTransactions: [Transaction] {
+        guard let budget = currentBudget else { return [] }
+        return transactionVM.transactions(from: budget.startDate, to: budget.endDate).filter { $0.type == .expense }
     }
 
     private var alertMessage: String? {
@@ -42,17 +45,23 @@ struct BudgetView: View {
 
     private var projectedOverrunDays: Int? {
         guard let budget = currentBudget else { return nil }
-        return budgetVM.projectedOverrunInDays(for: budget, spent: spent, month: selectedMonth)
+        return budgetVM.projectedOverrunInDays(for: budget, spent: spent)
     }
 
     var body: some View {
         List {
             Section {
-                DatePicker("Mois", selection: $selectedMonth, displayedComponents: [.date])
+                DatePicker("Date", selection: $selectedDate, displayedComponents: [.date])
                     .datePickerStyle(.compact)
             }
 
             if let budget = currentBudget {
+                Section("Période") {
+                    Text("Du \(budget.startDate.formatted(date: .abbreviated, time: .omitted)) au \(budget.endDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Vue d'ensemble") {
                     VStack(spacing: 12) {
                         ProgressView(value: progress)
@@ -93,7 +102,7 @@ struct BudgetView: View {
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .foregroundStyle(.blue)
-                            Text("Report du mois précédent")
+                            Text("Report de la période précédente")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -122,7 +131,7 @@ struct BudgetView: View {
                     }
                 }
 
-                Section("Revenus du mois") {
+                Section("Revenus") {
                     HStack {
                         Image(systemName: "arrow.up.circle.fill")
                             .foregroundStyle(.green)
@@ -134,12 +143,12 @@ struct BudgetView: View {
                     }
                 }
 
-                Section("Dépenses (\(monthTransactions.count))") {
-                    if monthTransactions.isEmpty {
-                        Text("Aucune dépense ce mois")
+                Section("Dépenses (\(periodTransactions.count))") {
+                    if periodTransactions.isEmpty {
+                        Text("Aucune dépense sur cette période")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(monthTransactions) { t in
+                        ForEach(periodTransactions) { t in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(t.title).font(.body)
@@ -178,7 +187,7 @@ struct BudgetView: View {
             } else {
                 Section {
                     VStack(spacing: 8) {
-                        Text("Aucun budget pour ce mois")
+                        Text("Aucun budget pour cette date")
                             .foregroundStyle(.secondary)
                         Button("Créer un budget") { showAdd = true }
                             .buttonStyle(.borderedProminent)
@@ -205,7 +214,7 @@ struct BudgetView: View {
             budgetVM.ensureRecurringBudgetForCurrentMonth(context: context, transactions: transactions, rates: currencyService.rates)
             triggerBudgetNotificationIfNeeded()
         }
-        .onChange(of: selectedMonth) { _, _ in
+        .onChange(of: selectedDate) { _, _ in
             budgetVM.budgets = budgets
             triggerBudgetNotificationIfNeeded()
         }
@@ -221,6 +230,6 @@ struct BudgetView: View {
 
     private func triggerBudgetNotificationIfNeeded() {
         guard settingsVM.settings?.budgetAlertsEnabled == true, let budget = currentBudget else { return }
-        budgetVM.notifyIfNeeded(for: budget, spent: spent, month: selectedMonth)
+        budgetVM.notifyIfNeeded(for: budget, spent: spent)
     }
 }

@@ -43,13 +43,60 @@ struct BudgifyApp: App {
             let storeURL = appSupport.appendingPathComponent("Budgify.store")
             let currentSchema = Schema(BudgifySchemaV2.models)
             let configuration = ModelConfiguration(schema: currentSchema, url: storeURL)
+            return try makeContainer(schema: currentSchema, configuration: configuration, storeURL: storeURL)
+        } catch {
+            fatalError("Unable to initialize SwiftData store: \(error)")
+        }
+    }
+
+    private func makeContainer(schema: Schema, configuration: ModelConfiguration, storeURL: URL) throws -> ModelContainer {
+        do {
             return try ModelContainer(
-                for: currentSchema,
-                migrationPlan: BudgifyMigrationPlan.self,
+                for: schema,
                 configurations: [configuration]
             )
         } catch {
-            fatalError("Unable to initialize SwiftData store: \(error)")
+            try backupStoreFiles(at: storeURL)
+            try purgeStoreFiles(at: storeURL)
+            return try ModelContainer(
+                for: schema,
+                configurations: [configuration]
+            )
+        }
+    }
+
+    private func backupStoreFiles(at storeURL: URL) throws {
+        let fileManager = FileManager.default
+        let recoveryDirectory = storeURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("StoreRecovery", isDirectory: true)
+        try fileManager.createDirectory(at: recoveryDirectory, withIntermediateDirectories: true)
+
+        let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
+        let candidates = [
+            storeURL,
+            storeURL.appendingPathExtension("shm"),
+            storeURL.appendingPathExtension("wal")
+        ]
+
+        for sourceURL in candidates where fileManager.fileExists(atPath: sourceURL.path) {
+            let backupURL = recoveryDirectory.appendingPathComponent("\(sourceURL.lastPathComponent).\(stamp).bak")
+            if fileManager.fileExists(atPath: backupURL.path) {
+                try fileManager.removeItem(at: backupURL)
+            }
+            try fileManager.copyItem(at: sourceURL, to: backupURL)
+        }
+    }
+
+    private func purgeStoreFiles(at storeURL: URL) throws {
+        let fileManager = FileManager.default
+        let urls = [
+            storeURL,
+            storeURL.appendingPathExtension("shm"),
+            storeURL.appendingPathExtension("wal")
+        ]
+        for url in urls where fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
         }
     }
 }
