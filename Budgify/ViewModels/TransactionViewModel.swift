@@ -28,7 +28,8 @@ final class TransactionViewModel {
             recurrenceFrequencyRaw: frequency.rawValue,
             recurrenceNextDate: nextDate(after: transaction.date, frequency: frequency),
             recurrenceSeriesID: seriesID,
-            isRecurringTemplate: true
+            isRecurringTemplate: true,
+            excludedFromBudget: transaction.excludedFromBudget
         )
         context.insert(template)
         try? context.save()
@@ -57,7 +58,8 @@ final class TransactionViewModel {
                     noteCiphertext: template.noteCiphertext,
                     noteHash: template.noteHash,
                     recurrenceSeriesID: template.recurrenceSeriesID,
-                    isRecurringTemplate: false
+                    isRecurringTemplate: false,
+                    excludedFromBudget: template.excludedFromBudget
                 )
                 context.insert(occurrence)
                 dueDate = nextDate(after: dueDate, frequency: frequency)

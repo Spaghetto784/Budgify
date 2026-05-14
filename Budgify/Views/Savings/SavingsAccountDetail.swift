@@ -9,6 +9,11 @@ struct SavingsAccountDetailView: View {
     @State private var showUpdate = false
     @State private var newBalance = ""
     @State private var note = ""
+    @State private var newYieldRate = ""
+
+    private var yearlyProjection: Double {
+        account.balance * (account.annualYieldRate / 100.0)
+    }
 
     var body: some View {
         List {
@@ -27,6 +32,22 @@ struct SavingsAccountDetailView: View {
                 .padding(.vertical, 4)
 
                 Button("Mettre à jour le solde") { showUpdate = true }
+            }
+
+            Section("Rendement") {
+                HStack {
+                    Text("Taux annuel")
+                    Spacer()
+                    Text("\(String(format: "%.2f", account.annualYieldRate))%")
+                        .bold()
+                }
+                HStack {
+                    Text("Projection annuelle")
+                    Spacer()
+                    Text("\(account.currency == "EUR" ? "€" : "฿")\(String(format: "%.2f", yearlyProjection))")
+                        .foregroundStyle(.green)
+                        .bold()
+                }
             }
 
             if account.history.count > 1 {
@@ -74,6 +95,8 @@ struct SavingsAccountDetailView: View {
                 Form {
                     TextField("Nouveau solde", text: $newBalance)
                         .keyboardType(.decimalPad)
+                    TextField("Nouveau taux annuel (%)", text: $newYieldRate)
+                        .keyboardType(.decimalPad)
                     TextField("Note (optionnel)", text: $note)
                 }
                 .navigationTitle("Mettre à jour")
@@ -84,14 +107,20 @@ struct SavingsAccountDetailView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Enregistrer") {
-                            guard let bal = Double(newBalance) else { return }
+                            guard let bal = NumberParsing.parseDouble(newBalance) else { return }
+                            let yieldRate = NumberParsing.parseDouble(newYieldRate) ?? account.annualYieldRate
                             savingsVM.updateBalance(account: account, newBalance: bal, note: note, context: context)
+                            account.annualYieldRate = max(yieldRate, 0)
+                            try? context.save()
                             showUpdate = false
                         }
-                        .disabled(Double(newBalance) == nil)
+                        .disabled(NumberParsing.parseDouble(newBalance) == nil)
                     }
                 }
             }
+        }
+        .onAppear {
+            newYieldRate = String(format: "%.2f", account.annualYieldRate)
         }
     }
 }

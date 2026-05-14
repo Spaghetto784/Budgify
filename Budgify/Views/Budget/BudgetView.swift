@@ -18,7 +18,11 @@ struct BudgetView: View {
 
     private var spent: Double {
         guard let budget = currentBudget else { return 0 }
-        return transactionVM.total(type: .expense, from: budget.startDate, to: budget.endDate, in: currency, rates: currencyService.rates)
+        return transactionVM.transactions(from: budget.startDate, to: budget.endDate)
+            .filter { $0.type == .expense && !$0.excludedFromBudget }
+            .reduce(0) { acc, transaction in
+                acc + transactionVM.converted(amount: transaction.amount, from: transaction.currency, to: currency, rates: currencyService.rates)
+            }
     }
 
     private var income: Double {
@@ -35,7 +39,7 @@ struct BudgetView: View {
 
     private var periodTransactions: [Transaction] {
         guard let budget = currentBudget else { return [] }
-        return transactionVM.transactions(from: budget.startDate, to: budget.endDate).filter { $0.type == .expense }
+        return transactionVM.transactions(from: budget.startDate, to: budget.endDate).filter { $0.type == .expense && !$0.excludedFromBudget }
     }
 
     private var alertMessage: String? {

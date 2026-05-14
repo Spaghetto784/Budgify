@@ -7,8 +7,12 @@ struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var settingsVM
     @Environment(CurrencyService.self) private var currencyService
     @Environment(SecurityService.self) private var securityService
+    @Environment(RevolutSyncService.self) private var revolutSyncService
 
     @State private var keyRotationResultMessage: String?
+    @State private var revolutAPIKey = ""
+    @State private var revolutBackendURL = ""
+    @State private var revolutStatusMessage: String?
 
     private let accentColors: [(name: String, hex: String)] = [
         ("Vert", "27AE60"),
@@ -158,6 +162,66 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+
+                    Section("Connexion Revolut") {
+                        TextField("Backend URL", text: $revolutBackendURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+
+                        SecureField("Clé API / token", text: $revolutAPIKey)
+
+                        Button("Connecter") {
+                            Task {
+                                do {
+                                    revolutSyncService.setBackendBaseURL(revolutBackendURL)
+                                    let message = try await revolutSyncService.connect(apiKey: revolutAPIKey)
+                                    await MainActor.run { revolutStatusMessage = message }
+                                } catch {
+                                    await MainActor.run { revolutStatusMessage = error.localizedDescription }
+                                }
+                            }
+                        }
+
+                        Button("Synchroniser maintenant") {
+                            Task {
+                                do {
+                                    revolutSyncService.setBackendBaseURL(revolutBackendURL)
+                                    let result = try await revolutSyncService.sync(context: context)
+                                    await MainActor.run {
+                                        revolutStatusMessage = "Sync OK: \(result.createdTransactions) transaction(s), solde Revolut \(String(format: "%.2f", result.updatedBalance))"
+                                    }
+                                } catch {
+                                    await MainActor.run { revolutStatusMessage = error.localizedDescription }
+                                }
+                            }
+                        }
+
+                        Button("Reset clé API", role: .destructive) {
+                            Task {
+                                do {
+                                    revolutSyncService.setBackendBaseURL(revolutBackendURL)
+                                    let message = try await revolutSyncService.resetConnection()
+                                    await MainActor.run {
+                                        revolutAPIKey = ""
+                                        revolutStatusMessage = message
+                                    }
+                                } catch {
+                                    await MainActor.run { revolutStatusMessage = error.localizedDescription }
+                                }
+                            }
+                        }
+
+                        Text(revolutSyncService.isConnected ? "État: connecté" : "État: non connecté")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        if let revolutStatusMessage {
+                            Text(revolutStatusMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .navigationTitle("Réglages")
                 .navigationBarTitleDisplayMode(.inline)
@@ -165,6 +229,9 @@ struct SettingsView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Fermer") { dismiss() }
                     }
+                }
+                .onAppear {
+                    revolutBackendURL = revolutSyncService.backendBaseURL
                 }
             } else {
                 ProgressView()

@@ -24,6 +24,7 @@ final class SavingsAccount {
     var currency: String
     var icon: String
     var accountTypeRaw: String
+    var annualYieldRate: Double
     var history: [SavingsEntry]
 
     var accountType: AccountType {
@@ -31,12 +32,20 @@ final class SavingsAccount {
         set { accountTypeRaw = newValue.rawValue }
     }
 
-    init(name: String, balance: Double, currency: String = "EUR", icon: String = "🏦", accountType: AccountType = .bank) {
+    init(
+        name: String,
+        balance: Double,
+        currency: String = "EUR",
+        icon: String = "🏦",
+        accountType: AccountType = .bank,
+        annualYieldRate: Double = 0
+    ) {
         self.name = name
         self.balance = balance
         self.currency = currency
         self.icon = icon
         self.accountTypeRaw = accountType.rawValue
+        self.annualYieldRate = annualYieldRate
         self.history = []
     }
 }

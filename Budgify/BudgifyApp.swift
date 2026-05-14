@@ -13,6 +13,7 @@ struct BudgifyApp: App {
     @State private var securityService = SecurityService()
     @State private var backupService = DataBackupService()
     @State private var expensePDFService = ExpensePDFService()
+    @State private var revolutSyncService = RevolutSyncService()
 
     var body: some Scene {
         WindowGroup {
@@ -27,6 +28,7 @@ struct BudgifyApp: App {
                 .environment(securityService)
                 .environment(backupService)
                 .environment(expensePDFService)
+                .environment(revolutSyncService)
                 .task { await currencyService.fetchRates() }
         }
         .modelContainer(sharedModelContainer)

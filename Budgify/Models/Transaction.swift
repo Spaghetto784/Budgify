@@ -30,6 +30,7 @@ final class Transaction {
     var recurrenceNextDate: Date?
     var recurrenceSeriesID: String?
     var isRecurringTemplate: Bool
+    var excludedFromBudget: Bool
 
     init(
         title: String,
@@ -47,7 +48,8 @@ final class Transaction {
         recurrenceFrequencyRaw: String? = nil,
         recurrenceNextDate: Date? = nil,
         recurrenceSeriesID: String? = nil,
-        isRecurringTemplate: Bool = false
+        isRecurringTemplate: Bool = false,
+        excludedFromBudget: Bool = false
     ) {
         self.title = title
         self.amount = amount
@@ -65,6 +67,7 @@ final class Transaction {
         self.recurrenceNextDate = recurrenceNextDate
         self.recurrenceSeriesID = recurrenceSeriesID
         self.isRecurringTemplate = isRecurringTemplate
+        self.excludedFromBudget = excludedFromBudget
     }
 
     var recurrenceFrequency: RecurrenceFrequency? {
