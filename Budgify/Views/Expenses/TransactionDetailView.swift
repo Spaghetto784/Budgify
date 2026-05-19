@@ -8,6 +8,7 @@ struct TransactionDetailView: View {
     @Environment(TransactionViewModel.self) private var transactionVM
     @Environment(SettingsViewModel.self) private var settingsVM
     @Environment(SecurityService.self) private var securityService
+    @Environment(CategoryClassifier.self) private var classifier
     @Query private var categories: [Category]
 
     let transaction: Transaction
@@ -21,6 +22,10 @@ struct TransactionDetailView: View {
     @State private var editCategory: Category?
     @State private var editNote = ""
     @State private var editExcludeFromBudget = false
+    @State private var editTagsText = ""
+    @State private var showSplit = false
+    @State private var splitAmount = ""
+    @State private var splitCategory: Category?
 
     init(transaction: Transaction) {
         self.transaction = transaction
@@ -152,6 +157,14 @@ struct TransactionDetailView: View {
                 .font(.subheadline)
             }
 
+            if !transaction.tags.isEmpty {
+                Section("Tags") {
+                    Text(transaction.tags.map { "#\($0)" }.joined(separator: " "))
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                }
+            }
+
             Section {
                 Button {
                     prepareEdit()
@@ -161,6 +174,22 @@ struct TransactionDetailView: View {
                         Spacer()
                         Text("Modifier")
                         Spacer()
+                    }
+                }
+            }
+
+            if transaction.type == .expense, transaction.amount > 0 {
+                Section {
+                    Button {
+                        splitAmount = ""
+                        splitCategory = classifier.suggest(for: transaction.title, categories: categories)
+                        showSplit = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Split transaction")
+                            Spacer()
+                        }
                     }
                 }
             }
@@ -182,6 +211,9 @@ struct TransactionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showEdit) {
             editSheet
+        }
+        .sheet(isPresented: $showSplit) {
+            splitSheet
         }
     }
 
@@ -224,6 +256,10 @@ struct TransactionDetailView: View {
                 Section("Note") {
                     TextField("Note", text: $editNote, axis: .vertical)
                 }
+
+                Section("Tags") {
+                    TextField("Tags (ex: voyage,pro,urgent)", text: $editTagsText)
+                }
             }
             .navigationTitle("Modifier")
             .navigationBarTitleDisplayMode(.inline)
@@ -241,6 +277,48 @@ struct TransactionDetailView: View {
         }
     }
 
+    private var splitSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Montant à séparer") {
+                    TextField("Montant", text: $splitAmount)
+                        .keyboardType(.decimalPad)
+                    Text("Montant total: \(currencyService.symbol(for: transaction.currency))\(String(format: "%.2f", transaction.amount))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Catégorie du split") {
+                    Picker("Catégorie", selection: $splitCategory) {
+                        Text("Aucune").tag(Optional<Category>.none)
+                        ForEach(categories) { category in
+                            Text("\(category.icon) \(category.name)")
+                                .tag(Optional(category))
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Split")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Annuler") { showSplit = false }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Valider") {
+                        applySplit()
+                    }
+                    .disabled(!canSplit)
+                }
+            }
+        }
+    }
+
+    private var canSplit: Bool {
+        guard let value = NumberParsing.parseDouble(splitAmount) else { return false }
+        return value > 0 && value < transaction.amount
+    }
+
     private func prepareEdit() {
         editTitle = transaction.title
         editAmount = String(format: "%.2f", transaction.amount)
@@ -249,6 +327,7 @@ struct TransactionDetailView: View {
         editCurrency = transaction.currency
         editExcludeFromBudget = transaction.excludedFromBudget
         editNote = displayNote
+        editTagsText = transaction.tagsRaw
         if let categoryName = transaction.resolvedCategoryName {
             editCategory = categories.first(where: { $0.name == categoryName })
         } else {
@@ -265,6 +344,7 @@ struct TransactionDetailView: View {
         transaction.type = editType
         transaction.currency = editCurrency
         transaction.excludedFromBudget = editExcludeFromBudget
+        transaction.tagsRaw = editTagsText
 
         if editType == .expense {
             transaction.categoryNameSnapshot = editCategory?.name
@@ -293,5 +373,35 @@ struct TransactionDetailView: View {
 
         try? context.save()
         showEdit = false
+    }
+
+    private func applySplit() {
+        guard let parsed = NumberParsing.parseDouble(splitAmount), parsed > 0, parsed < transaction.amount else { return }
+
+        let splitGroup = transaction.splitGroupID ?? UUID().uuidString
+        transaction.splitGroupID = splitGroup
+
+        let splitTransaction = Transaction(
+            title: "\(transaction.title) (split)",
+            amount: parsed,
+            date: transaction.date,
+            currency: transaction.currency,
+            type: transaction.type,
+            category: nil,
+            categoryNameSnapshot: splitCategory?.name ?? transaction.categoryNameSnapshot,
+            categoryIconSnapshot: splitCategory?.icon ?? transaction.categoryIconSnapshot,
+            categoryColorHexSnapshot: splitCategory?.colorHex ?? transaction.categoryColorHexSnapshot,
+            note: transaction.note,
+            noteCiphertext: transaction.noteCiphertext,
+            noteHash: transaction.noteHash,
+            excludedFromBudget: transaction.excludedFromBudget,
+            tagsRaw: transaction.tagsRaw,
+            splitGroupID: splitGroup
+        )
+
+        transaction.amount -= parsed
+        context.insert(splitTransaction)
+        try? context.save()
+        showSplit = false
     }
 }

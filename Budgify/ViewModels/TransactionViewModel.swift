@@ -1,9 +1,40 @@
 import SwiftData
 import Foundation
 
+struct SubscriptionInsight: Identifiable {
+    let id: String
+    let title: String
+    let monthlyEstimate: Double
+    let annualEstimate: Double
+    let currency: String
+    let occurrences: Int
+}
+
+private struct DeletedTransactionSnapshot {
+    let title: String
+    let amount: Double
+    let date: Date
+    let currency: String
+    let type: TransactionType
+    let categoryNameSnapshot: String?
+    let categoryIconSnapshot: String?
+    let categoryColorHexSnapshot: String?
+    let note: String
+    let noteCiphertext: String?
+    let noteHash: String?
+    let recurrenceFrequencyRaw: String?
+    let recurrenceNextDate: Date?
+    let recurrenceSeriesID: String?
+    let isRecurringTemplate: Bool
+    let excludedFromBudget: Bool
+    let tagsRaw: String
+    let splitGroupID: String?
+}
+
 @Observable
 final class TransactionViewModel {
     var transactions: [Transaction] = []
+    private var lastDeletedTransaction: DeletedTransactionSnapshot?
 
     func add(transaction: Transaction, context: ModelContext) {
         context.insert(transaction)
@@ -72,8 +103,60 @@ final class TransactionViewModel {
     }
 
     func delete(transaction: Transaction, context: ModelContext) {
+        lastDeletedTransaction = DeletedTransactionSnapshot(
+            title: transaction.title,
+            amount: transaction.amount,
+            date: transaction.date,
+            currency: transaction.currency,
+            type: transaction.type,
+            categoryNameSnapshot: transaction.categoryNameSnapshot,
+            categoryIconSnapshot: transaction.categoryIconSnapshot,
+            categoryColorHexSnapshot: transaction.categoryColorHexSnapshot,
+            note: transaction.note,
+            noteCiphertext: transaction.noteCiphertext,
+            noteHash: transaction.noteHash,
+            recurrenceFrequencyRaw: transaction.recurrenceFrequencyRaw,
+            recurrenceNextDate: transaction.recurrenceNextDate,
+            recurrenceSeriesID: transaction.recurrenceSeriesID,
+            isRecurringTemplate: transaction.isRecurringTemplate,
+            excludedFromBudget: transaction.excludedFromBudget,
+            tagsRaw: transaction.tagsRaw,
+            splitGroupID: transaction.splitGroupID
+        )
         context.delete(transaction)
         try? context.save()
+    }
+
+    var canUndoDelete: Bool {
+        lastDeletedTransaction != nil
+    }
+
+    func undoLastDelete(context: ModelContext) {
+        guard let snapshot = lastDeletedTransaction else { return }
+        let restored = Transaction(
+            title: snapshot.title,
+            amount: snapshot.amount,
+            date: snapshot.date,
+            currency: snapshot.currency,
+            type: snapshot.type,
+            category: nil,
+            categoryNameSnapshot: snapshot.categoryNameSnapshot,
+            categoryIconSnapshot: snapshot.categoryIconSnapshot,
+            categoryColorHexSnapshot: snapshot.categoryColorHexSnapshot,
+            note: snapshot.note,
+            noteCiphertext: snapshot.noteCiphertext,
+            noteHash: snapshot.noteHash,
+            recurrenceFrequencyRaw: snapshot.recurrenceFrequencyRaw,
+            recurrenceNextDate: snapshot.recurrenceNextDate,
+            recurrenceSeriesID: snapshot.recurrenceSeriesID,
+            isRecurringTemplate: snapshot.isRecurringTemplate,
+            excludedFromBudget: snapshot.excludedFromBudget,
+            tagsRaw: snapshot.tagsRaw,
+            splitGroupID: snapshot.splitGroupID
+        )
+        context.insert(restored)
+        try? context.save()
+        lastDeletedTransaction = nil
     }
 
     func detachCategoryRelations(context: ModelContext) {
@@ -125,10 +208,59 @@ final class TransactionViewModel {
         return inEUR * (rates[to] ?? 1)
     }
 
+    func subscriptionInsights(for month: Date, in currency: String, rates: [String: Double]) -> [SubscriptionInsight] {
+        let calendar = Calendar.current
+        guard let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: month) else { return [] }
+        let candidates = transactions.filter {
+            !$0.isRecurringTemplate &&
+            $0.type == .expense &&
+            !$0.excludedFromBudget &&
+            $0.date >= sixMonthsAgo &&
+            !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        let grouped = Dictionary(grouping: candidates, by: { normalizeSubscriptionTitle($0.title) })
+        return grouped.compactMap { key, values in
+            guard values.count >= 2 else { return nil }
+            let sorted = values.sorted { $0.date < $1.date }
+            guard
+                let first = sorted.first?.date,
+                let last = sorted.last?.date,
+                let days = calendar.dateComponents([.day], from: first, to: last).day,
+                days >= 25
+            else { return nil }
+
+            let total = sorted.reduce(0.0) { acc, transaction in
+                acc + converted(amount: transaction.amount, from: transaction.currency, to: currency, rates: rates)
+            }
+            let monthsCovered = max(Double(days) / 30.0, 1.0)
+            let monthly = total / monthsCovered
+            return SubscriptionInsight(
+                id: key,
+                title: key.capitalized,
+                monthlyEstimate: monthly,
+                annualEstimate: monthly * 12.0,
+                currency: currency,
+                occurrences: values.count
+            )
+        }
+        .sorted { $0.monthlyEstimate > $1.monthlyEstimate }
+    }
+
     private func nextDate(after date: Date, frequency: RecurrenceFrequency) -> Date {
         let calendar = Calendar.current
         let component: Calendar.Component = frequency == .weekly ? .day : .month
         let value = frequency == .weekly ? 7 : 1
         return calendar.date(byAdding: component, value: value, to: date) ?? date
+    }
+
+    private func normalizeSubscriptionTitle(_ title: String) -> String {
+        title
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

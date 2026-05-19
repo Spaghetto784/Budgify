@@ -26,6 +26,7 @@ struct AddTransactionView: View {
     @State private var recurrenceFrequency: RecurrenceFrequency = .monthly
     @State private var linkToSavings = false
     @State private var selectedSavingsAccount: SavingsAccount?
+    @State private var tagsText = ""
 
     private var displayCurrencies: [String] {
         settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
@@ -162,6 +163,7 @@ struct AddTransactionView: View {
 
                 Section("Note (optionnel)") {
                     TextField("Note", text: $note)
+                    TextField("Tags (ex: voyage,pro,urgent)", text: $tagsText)
                     if settingsVM.settings?.dataEncryptionEnabled == true {
                         Label("Cette note sera chiffrée (AES-256)", systemImage: "lock.shield")
                             .font(.caption)
@@ -211,7 +213,8 @@ struct AddTransactionView: View {
             categoryColorHexSnapshot: selectedCategory?.colorHex,
             note: storedNote,
             noteCiphertext: ciphertext,
-            noteHash: noteHash
+            noteHash: noteHash,
+            tagsRaw: tagsText
         )
 
         transactionVM.add(transaction: transaction, context: context)

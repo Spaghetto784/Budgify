@@ -21,6 +21,12 @@ final class BudgetViewModel {
         try? context.save()
     }
 
+    func increaseLimit(for budget: Budget, by amount: Double, context: ModelContext) {
+        guard amount > 0 else { return }
+        budget.limit += amount
+        try? context.save()
+    }
+
     func delete(budget: Budget, context: ModelContext) {
         context.delete(budget)
         try? context.save()

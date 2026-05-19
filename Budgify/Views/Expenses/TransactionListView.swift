@@ -81,6 +81,14 @@ struct TransactionListView: View {
         .navigationTitle("Transactions")
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                if transactionVM.canUndoDelete {
+                    Button {
+                        transactionVM.undoLastDelete(context: context)
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward.circle")
+                    }
+                }
+
                 Button {
                     exportPDF()
                 } label: {

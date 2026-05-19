@@ -40,6 +40,9 @@ final class DataBackupService {
         var recurrenceNextDate: Date?
         var recurrenceSeriesID: String?
         var isRecurringTemplate: Bool
+        var excludedFromBudget: Bool?
+        var tagsRaw: String?
+        var splitGroupID: String?
     }
 
     private struct BudgetSnapshot: Codable {
@@ -65,6 +68,8 @@ final class DataBackupService {
         var balance: Double
         var currency: String
         var icon: String
+        var accountTypeRaw: String?
+        var annualYieldRate: Double?
         var history: [SavingsEntrySnapshot]
     }
 
@@ -133,7 +138,10 @@ final class DataBackupService {
                     recurrenceFrequencyRaw: $0.recurrenceFrequencyRaw,
                     recurrenceNextDate: $0.recurrenceNextDate,
                     recurrenceSeriesID: $0.recurrenceSeriesID,
-                    isRecurringTemplate: $0.isRecurringTemplate
+                    isRecurringTemplate: $0.isRecurringTemplate,
+                    excludedFromBudget: $0.excludedFromBudget,
+                    tagsRaw: $0.tagsRaw,
+                    splitGroupID: $0.splitGroupID
                 )
             },
             budgets: budgets.map {
@@ -155,6 +163,8 @@ final class DataBackupService {
                     balance: $0.balance,
                     currency: $0.currency,
                     icon: $0.icon,
+                    accountTypeRaw: $0.accountTypeRaw,
+                    annualYieldRate: $0.annualYieldRate,
                     history: $0.history.map { .init(date: $0.date, balance: $0.balance, note: $0.note) }
                 )
             },
@@ -255,7 +265,10 @@ final class DataBackupService {
                     recurrenceFrequencyRaw: transaction.recurrenceFrequencyRaw,
                     recurrenceNextDate: transaction.recurrenceNextDate,
                     recurrenceSeriesID: transaction.recurrenceSeriesID,
-                    isRecurringTemplate: transaction.isRecurringTemplate
+                    isRecurringTemplate: transaction.isRecurringTemplate,
+                    excludedFromBudget: transaction.excludedFromBudget ?? false,
+                    tagsRaw: transaction.tagsRaw ?? "",
+                    splitGroupID: transaction.splitGroupID
                 )
                 context.insert(model)
             }
@@ -280,7 +293,9 @@ final class DataBackupService {
                     name: account.name,
                     balance: account.balance,
                     currency: account.currency,
-                    icon: account.icon
+                    icon: account.icon,
+                    accountType: AccountType(rawValue: account.accountTypeRaw ?? "bank") ?? .bank,
+                    annualYieldRate: account.annualYieldRate ?? 0
                 )
 
                 for entry in account.history {

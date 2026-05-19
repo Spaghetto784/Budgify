@@ -31,6 +31,8 @@ final class Transaction {
     var recurrenceSeriesID: String?
     var isRecurringTemplate: Bool
     var excludedFromBudget: Bool
+    var tagsRaw: String
+    var splitGroupID: String?
 
     init(
         title: String,
@@ -49,7 +51,9 @@ final class Transaction {
         recurrenceNextDate: Date? = nil,
         recurrenceSeriesID: String? = nil,
         isRecurringTemplate: Bool = false,
-        excludedFromBudget: Bool = false
+        excludedFromBudget: Bool = false,
+        tagsRaw: String = "",
+        splitGroupID: String? = nil
     ) {
         self.title = title
         self.amount = amount
@@ -68,6 +72,8 @@ final class Transaction {
         self.recurrenceSeriesID = recurrenceSeriesID
         self.isRecurringTemplate = isRecurringTemplate
         self.excludedFromBudget = excludedFromBudget
+        self.tagsRaw = tagsRaw
+        self.splitGroupID = splitGroupID
     }
 
     var recurrenceFrequency: RecurrenceFrequency? {
@@ -85,5 +91,20 @@ final class Transaction {
 
     var resolvedCategoryColorHex: String? {
         categoryColorHexSnapshot
+    }
+
+    var tags: [String] {
+        get {
+            tagsRaw
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        set {
+            tagsRaw = newValue
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ",")
+        }
     }
 }

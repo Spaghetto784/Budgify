@@ -11,6 +11,8 @@ struct BudgetView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var selectedDate = Date.now
     @State private var showAdd = false
+    @State private var showIncreaseLimit = false
+    @State private var increaseAmount = ""
 
     private var currentBudget: Budget? { budgetVM.budget(containing: selectedDate) }
     private var symbol: String { currentBudget.map { currencyService.symbol(for: $0.currency) } ?? "€" }
@@ -117,6 +119,15 @@ struct BudgetView: View {
                     }
                 }
 
+                Section("Ajustement") {
+                    Button {
+                        increaseAmount = ""
+                        showIncreaseLimit = true
+                    } label: {
+                        Label("Ajouter au budget", systemImage: "plus.circle.fill")
+                    }
+                }
+
                 if let alertMessage {
                     Section("Alertes") {
                         Label(alertMessage, systemImage: "bell.badge.fill")
@@ -212,6 +223,9 @@ struct BudgetView: View {
         .sheet(isPresented: $showAdd) {
             AddBudgetView()
         }
+        .sheet(isPresented: $showIncreaseLimit) {
+            increaseLimitSheet
+        }
         .onAppear {
             budgetVM.budgets = budgets
             transactionVM.transactions = transactions
@@ -235,5 +249,42 @@ struct BudgetView: View {
     private func triggerBudgetNotificationIfNeeded() {
         guard settingsVM.settings?.budgetAlertsEnabled == true, let budget = currentBudget else { return }
         budgetVM.notifyIfNeeded(for: budget, spent: spent)
+    }
+
+    private var increaseLimitSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Montant à ajouter") {
+                    TextField("Montant", text: $increaseAmount)
+                        .keyboardType(.decimalPad)
+                    if let budget = currentBudget {
+                        Text("Limite actuelle: \(currencyService.symbol(for: budget.currency))\(String(format: "%.2f", budget.limit))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Ajuster budget")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Annuler") {
+                        showIncreaseLimit = false
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Valider") {
+                        applyIncreaseLimit()
+                    }
+                    .disabled(NumberParsing.parseDouble(increaseAmount) == nil)
+                }
+            }
+        }
+    }
+
+    private func applyIncreaseLimit() {
+        guard let budget = currentBudget, let amount = NumberParsing.parseDouble(increaseAmount), amount > 0 else { return }
+        budgetVM.increaseLimit(for: budget, by: amount, context: context)
+        showIncreaseLimit = false
     }
 }

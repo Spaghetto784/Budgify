@@ -27,13 +27,28 @@ struct StatsView: View {
     private var byCategory: [(name: String, icon: String, total: Double, color: String)] {
         categories.compactMap { cat in
             let total = monthTransactions
-                .filter { $0.type == .expense && $0.resolvedCategoryName == cat.name }
+                .filter { $0.type == .expense && !$0.excludedFromBudget && $0.resolvedCategoryName == cat.name }
                 .reduce(0.0) { acc, t in
                     acc + transactionVM.converted(amount: t.amount, from: t.currency, to: selectedCurrency, rates: currencyService.rates)
                 }
             if total == 0 { return nil }
             return (name: cat.name, icon: cat.icon, total: total, color: cat.colorHex)
         }
+    }
+
+    private var categoryAlerts: [(name: String, icon: String, spent: Double, ratio: Double)] {
+        let trackedExpenses = byCategory.reduce(0.0) { $0 + $1.total }
+        guard trackedExpenses > 0 else { return [] }
+        return byCategory
+            .map { item in
+                (name: item.name, icon: item.icon, spent: item.total, ratio: item.total / trackedExpenses)
+            }
+            .filter { $0.ratio >= 0.30 }
+            .sorted { $0.spent > $1.spent }
+    }
+
+    private var subscriptions: [SubscriptionInsight] {
+        transactionVM.subscriptionInsights(for: selectedMonth, in: selectedCurrency, rates: currencyService.rates)
     }
 
     private var last6Months: [(month: String, expenses: Double, income: Double)] {
@@ -111,6 +126,57 @@ struct StatsView: View {
                             Text("\(symbol)\(String(format: "%.2f", item.total))")
                                 .bold()
                         }
+                    }
+                }
+            }
+
+            if !categoryAlerts.isEmpty {
+                Section("Alertes catégorie") {
+                    ForEach(categoryAlerts, id: \.name) { alert in
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("\(alert.icon) \(alert.name)")
+                            Spacer()
+                            VStack(alignment: .trailing) {
+                                Text("\(symbol)\(String(format: "%.2f", alert.spent))")
+                                    .bold()
+                                Text("\(Int(alert.ratio * 100))% des dépenses")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !subscriptions.isEmpty {
+                Section("Abonnements intelligents") {
+                    ForEach(subscriptions) { sub in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(sub.title)
+                                .font(.headline)
+                            HStack {
+                                Text("Mensuel estimé")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(symbol)\(String(format: "%.2f", sub.monthlyEstimate))")
+                                    .bold()
+                            }
+                            HStack {
+                                Text("Annuel estimé")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(symbol)\(String(format: "%.2f", sub.annualEstimate))")
+                                    .bold()
+                            }
+                            Text("\(sub.occurrences) occurrence(s) détectée(s)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
                     }
                 }
             }

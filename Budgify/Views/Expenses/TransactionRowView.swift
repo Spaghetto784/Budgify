@@ -49,6 +49,12 @@ struct TransactionRowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                if !transaction.tags.isEmpty {
+                    Text(transaction.tags.prefix(3).map { "#\($0)" }.joined(separator: " "))
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
             }
 
             Spacer()
