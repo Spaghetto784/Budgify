@@ -10,6 +10,7 @@ struct StatsView: View {
     @Query private var categories: [Category]
     @State private var selectedCurrency = "EUR"
     @State private var selectedMonth = Date.now
+    @State private var categoryChartStyle: Int = 0 // 0 = camembert, 1 = barres
 
     private var symbol: String { currencyService.symbol(for: selectedCurrency) }
 
@@ -105,16 +106,34 @@ struct StatsView: View {
 
             if !byCategory.isEmpty {
                 Section("Par catégorie") {
-                    Chart(byCategory, id: \.name) { item in
-                        SectorMark(
-                            angle: .value("Total", item.total),
-                            innerRadius: .ratio(0.55),
-                            angularInset: 2
-                        )
-                        .foregroundStyle(Color(hex: item.color))
+                    Picker("Style", selection: $categoryChartStyle) {
+                        Text("Camembert").tag(0)
+                        Text("Barres").tag(1)
                     }
-                    .frame(height: 200)
-                    .padding(.vertical, 8)
+                    .pickerStyle(.segmented)
+
+                    if categoryChartStyle == 0 {
+                        Chart(byCategory, id: \.name) { item in
+                            SectorMark(
+                                angle: .value("Total", item.total),
+                                innerRadius: .ratio(0.55),
+                                angularInset: 2
+                            )
+                            .foregroundStyle(Color(hex: item.color))
+                        }
+                        .frame(height: 200)
+                        .padding(.vertical, 8)
+                    } else {
+                        Chart(byCategory, id: \.name) { item in
+                            BarMark(
+                                x: .value("Catégorie", "\(item.icon) \(item.name)"),
+                                y: .value("Total", item.total)
+                            )
+                            .foregroundStyle(Color(hex: item.color))
+                        }
+                        .frame(height: 220)
+                        .padding(.vertical, 8)
+                    }
 
                     ForEach(byCategory, id: \.name) { item in
                         HStack {

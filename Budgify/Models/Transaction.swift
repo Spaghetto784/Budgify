@@ -33,6 +33,7 @@ final class Transaction {
     var excludedFromBudget: Bool
     var tagsRaw: String
     var splitGroupID: String?
+    var splitsRaw: String
 
     init(
         title: String,
@@ -53,7 +54,8 @@ final class Transaction {
         isRecurringTemplate: Bool = false,
         excludedFromBudget: Bool = false,
         tagsRaw: String = "",
-        splitGroupID: String? = nil
+        splitGroupID: String? = nil,
+        splitsRaw: String = ""
     ) {
         self.title = title
         self.amount = amount
@@ -74,6 +76,46 @@ final class Transaction {
         self.excludedFromBudget = excludedFromBudget
         self.tagsRaw = tagsRaw
         self.splitGroupID = splitGroupID
+        self.splitsRaw = splitsRaw
+    }
+
+    // MARK: - Recurrence helpers
+    var seriesKey: String? { recurrenceSeriesID }
+    var isRecurringOccurrence: Bool { (recurrenceSeriesID != nil) && !isRecurringTemplate }
+
+    // MARK: - Multi-category splits
+    var hasSplits: Bool { !splits.isEmpty }
+
+    var splits: [CategorySplit] {
+        get {
+            guard !splitsRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+            guard let data = splitsRaw.data(using: .utf8) else { return [] }
+            if let decoded = try? JSONDecoder().decode([CategorySplit].self, from: data) {
+                return decoded
+            }
+            return []
+        }
+        set {
+            if newValue.isEmpty {
+                splitsRaw = ""
+            } else if let data = try? JSONEncoder().encode(newValue), let json = String(data: data, encoding: .utf8) {
+                splitsRaw = json
+            }
+        }
+    }
+
+    /// Apply and normalize splits so that their sum equals the transaction amount.
+    func applySplits(_ newSplits: [CategorySplit]) {
+        let normalized = SplitAllocator.normalize(splits: newSplits, to: amount)
+        self.splits = normalized
+    }
+
+    /// Produce a human-readable summary of splits using category names.
+    func splitSummary(using categories: [Category]) -> String {
+        let names: [String] = splits.compactMap { $0.categoryName }
+        if names.isEmpty { return "" }
+        if names.count == 1 { return names[0] }
+        return names.prefix(2).joined(separator: " + ") + (names.count > 2 ? "…" : "")
     }
 
     var recurrenceFrequency: RecurrenceFrequency? {
@@ -82,15 +124,17 @@ final class Transaction {
     }
 
     var resolvedCategoryName: String? {
-        categoryNameSnapshot
+        if hasSplits { return "Multi-catégories" }
+        return categoryNameSnapshot
     }
 
     var resolvedCategoryIcon: String? {
-        categoryIconSnapshot
+        if hasSplits { return "📌" }
+        return categoryIconSnapshot
     }
 
     var resolvedCategoryColorHex: String? {
-        categoryColorHexSnapshot
+        return categoryColorHexSnapshot
     }
 
     var tags: [String] {
@@ -108,3 +152,4 @@ final class Transaction {
         }
     }
 }
+

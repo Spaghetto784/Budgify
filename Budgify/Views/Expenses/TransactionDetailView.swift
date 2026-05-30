@@ -24,8 +24,6 @@ struct TransactionDetailView: View {
     @State private var editExcludeFromBudget = false
     @State private var editTagsText = ""
     @State private var showSplit = false
-    @State private var splitAmount = ""
-    @State private var splitCategory: Category?
 
     init(transaction: Transaction) {
         self.transaction = transaction
@@ -80,6 +78,13 @@ struct TransactionDetailView: View {
             return "\(transaction.resolvedCategoryIcon ?? "📌") \(name)"
         }
         return "Aucune"
+    }
+    
+    private var splitSummaryText: String? {
+        let names = transaction.splits.map { $0.categoryName }
+        guard !names.isEmpty else { return nil }
+        if names.count == 1 { return names[0] }
+        return names.prefix(3).joined(separator: ", ") + (names.count > 3 ? "…" : "")
     }
 
     var body: some View {
@@ -146,6 +151,19 @@ struct TransactionDetailView: View {
                     }
                 }
             }
+            
+            if !transaction.splits.isEmpty {
+                Section("Répartition") {
+                    ForEach(transaction.splits, id: \.id) { split in
+                        HStack {
+                            Text(split.categoryName)
+                            Spacer()
+                            Text(String(format: "%.2f", split.amount))
+                                .foregroundStyle(transaction.type == .expense ? .red : .green)
+                        }
+                    }
+                }
+            }
 
             Section("Budget") {
                 HStack {
@@ -178,18 +196,14 @@ struct TransactionDetailView: View {
                 }
             }
 
-            if transaction.type == .expense, transaction.amount > 0 {
+            if transaction.type == .expense {
                 Section {
                     Button {
                         splitAmount = ""
                         splitCategory = classifier.suggest(for: transaction.title, categories: categories)
                         showSplit = true
                     } label: {
-                        HStack {
-                            Spacer()
-                            Text("Split transaction")
-                            Spacer()
-                        }
+                        HStack { Spacer(); Text("Éditer la répartition"); Spacer() }
                     }
                 }
             }
@@ -280,43 +294,97 @@ struct TransactionDetailView: View {
     private var splitSheet: some View {
         NavigationStack {
             Form {
-                Section("Montant à séparer") {
-                    TextField("Montant", text: $splitAmount)
-                        .keyboardType(.decimalPad)
-                    Text("Montant total: \(currencyService.symbol(for: transaction.currency))\(String(format: "%.2f", transaction.amount))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Section("Répartition") {
+                    if transaction.splits.isEmpty {
+                        Text("Aucune répartition").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(transaction.splits.enumerated()), id: \.0) { index, split in
+                            HStack {
+                                Menu(split.categoryName) {
+                                    ForEach(categories) { cat in
+                                        Button(action: {
+                                            var updated = transaction.splits
+                                            updated[index].categoryName = cat.name
+                                            transaction.applySplits(updated)
+                                        }) {
+                                            Text("\(cat.icon) \(cat.name)")
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+
+                                TextField("Montant", text: Binding(
+                                    get: { String(format: "%.2f", transaction.splits[index].amount) },
+                                    set: { newValue in
+                                        var updated = transaction.splits
+                                        let parsed = NumberParsing.parseDouble(newValue) ?? updated[index].amount
+                                        updated[index].amount = parsed
+                                        transaction.applySplits(updated)
+                                    }
+                                ))
+                                .keyboardType(.decimalPad)
+
+                                Button(role: .destructive) {
+                                    var updated = transaction.splits
+                                    updated.remove(at: index)
+                                    transaction.splits = updated
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            var updated = transaction.splits
+                            updated.append(CategorySplit(categoryName: categories.first?.name ?? "", amount: 0))
+                            transaction.applySplits(updated)
+                        } label: {
+                            Label("Ajouter une catégorie", systemImage: "plus.circle")
+                        }
+                        Spacer()
+                        Button("Normaliser") {
+                            let normalized = SplitAllocator.normalize(splits: transaction.splits, to: transaction.amount)
+                            transaction.splits = normalized
+                        }
+                    }
+                    .buttonStyle(.bordered)
                 }
 
-                Section("Catégorie du split") {
-                    Picker("Catégorie", selection: $splitCategory) {
-                        Text("Aucune").tag(Optional<Category>.none)
-                        ForEach(categories) { category in
-                            Text("\(category.icon) \(category.name)")
-                                .tag(Optional(category))
+                Section("Aide") {
+                    Button("Suggérer une répartition") {
+                        if let split = classifier.predictSplitCategories(for: transaction.title), !split.isEmpty {
+                            let total = transaction.amount
+                            let suggested = split.map { (name, ratio) in
+                                CategorySplit(categoryName: name, amount: ratio * total)
+                            }
+                            transaction.applySplits(suggested)
+                        } else {
+                            let top = classifier.suggestTop(for: transaction.title, categories: categories, limit: 3)
+                            guard !top.isEmpty else { return }
+                            let total = transaction.amount
+                            let equal = total / Double(top.count)
+                            let suggested = top.map { CategorySplit(categoryName: $0.name, amount: equal) }
+                            transaction.applySplits(suggested)
                         }
                     }
                 }
             }
-            .navigationTitle("Split")
+            .navigationTitle("Répartition")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Annuler") { showSplit = false }
+                    Button("Fermer") { showSplit = false }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Valider") {
-                        applySplit()
+                    Button("Enregistrer") {
+                        try? context.save()
+                        showSplit = false
                     }
-                    .disabled(!canSplit)
                 }
             }
         }
-    }
-
-    private var canSplit: Bool {
-        guard let value = NumberParsing.parseDouble(splitAmount) else { return false }
-        return value > 0 && value < transaction.amount
     }
 
     private func prepareEdit() {
@@ -373,35 +441,5 @@ struct TransactionDetailView: View {
 
         try? context.save()
         showEdit = false
-    }
-
-    private func applySplit() {
-        guard let parsed = NumberParsing.parseDouble(splitAmount), parsed > 0, parsed < transaction.amount else { return }
-
-        let splitGroup = transaction.splitGroupID ?? UUID().uuidString
-        transaction.splitGroupID = splitGroup
-
-        let splitTransaction = Transaction(
-            title: "\(transaction.title) (split)",
-            amount: parsed,
-            date: transaction.date,
-            currency: transaction.currency,
-            type: transaction.type,
-            category: nil,
-            categoryNameSnapshot: splitCategory?.name ?? transaction.categoryNameSnapshot,
-            categoryIconSnapshot: splitCategory?.icon ?? transaction.categoryIconSnapshot,
-            categoryColorHexSnapshot: splitCategory?.colorHex ?? transaction.categoryColorHexSnapshot,
-            note: transaction.note,
-            noteCiphertext: transaction.noteCiphertext,
-            noteHash: transaction.noteHash,
-            excludedFromBudget: transaction.excludedFromBudget,
-            tagsRaw: transaction.tagsRaw,
-            splitGroupID: splitGroup
-        )
-
-        transaction.amount -= parsed
-        context.insert(splitTransaction)
-        try? context.save()
-        showSplit = false
     }
 }

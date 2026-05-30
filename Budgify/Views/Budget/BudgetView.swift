@@ -11,8 +11,10 @@ struct BudgetView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var selectedDate = Date.now
     @State private var showAdd = false
-    @State private var showIncreaseLimit = false
-    @State private var increaseAmount = ""
+    @State private var showAdjustLimit = false
+    @State private var adjustAmount = ""
+    @State private var isIncrease = true
+    @State private var showSummary = false
 
     private var currentBudget: Budget? { budgetVM.budget(containing: selectedDate) }
     private var symbol: String { currentBudget.map { currencyService.symbol(for: $0.currency) } ?? "€" }
@@ -121,10 +123,11 @@ struct BudgetView: View {
 
                 Section("Ajustement") {
                     Button {
-                        increaseAmount = ""
-                        showIncreaseLimit = true
+                        adjustAmount = ""
+                        isIncrease = true
+                        showAdjustLimit = true
                     } label: {
-                        Label("Ajouter au budget", systemImage: "plus.circle.fill")
+                        Label("Ajuster le budget", systemImage: "arrow.up.arrow.down.circle.fill")
                     }
                 }
 
@@ -183,6 +186,25 @@ struct BudgetView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if !t.excludedFromBudget {
+                                    Button {
+                                        t.excludedFromBudget = true
+                                        try? context.save()
+                                    } label: {
+                                        Label("Retirer du budget", systemImage: "xmark.circle.fill")
+                                    }
+                                    .tint(.orange)
+                                } else {
+                                    Button {
+                                        t.excludedFromBudget = false
+                                        try? context.save()
+                                    } label: {
+                                        Label("Inclure au budget", systemImage: "checkmark.circle.fill")
+                                    }
+                                    .tint(.green)
+                                }
+                            }
                         }
                     }
                 }
@@ -214,7 +236,10 @@ struct BudgetView: View {
         }
         .navigationTitle("Budget")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { showSummary = true } label: {
+                    Image(systemName: "rectangle.stack")
+                }
                 Button { showAdd = true } label: {
                     Image(systemName: "plus")
                 }
@@ -223,8 +248,11 @@ struct BudgetView: View {
         .sheet(isPresented: $showAdd) {
             AddBudgetView()
         }
-        .sheet(isPresented: $showIncreaseLimit) {
-            increaseLimitSheet
+        .sheet(isPresented: $showAdjustLimit) {
+            adjustLimitSheet
+        }
+        .sheet(isPresented: $showSummary) {
+            BudgetSummaryListView()
         }
         .onAppear {
             budgetVM.budgets = budgets
@@ -251,11 +279,19 @@ struct BudgetView: View {
         budgetVM.notifyIfNeeded(for: budget, spent: spent)
     }
 
-    private var increaseLimitSheet: some View {
+    private var adjustLimitSheet: some View {
         NavigationStack {
             Form {
-                Section("Montant à ajouter") {
-                    TextField("Montant", text: $increaseAmount)
+                Section("Type d'ajustement") {
+                    Picker("Action", selection: $isIncrease) {
+                        Text("Augmenter").tag(true)
+                        Text("Diminuer").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section(isIncrease ? "Montant à ajouter" : "Montant à retirer") {
+                    TextField("Montant", text: $adjustAmount)
                         .keyboardType(.decimalPad)
                     if let budget = currentBudget {
                         Text("Limite actuelle: \(currencyService.symbol(for: budget.currency))\(String(format: "%.2f", budget.limit))")
@@ -269,22 +305,26 @@ struct BudgetView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Annuler") {
-                        showIncreaseLimit = false
+                        showAdjustLimit = false
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Valider") {
-                        applyIncreaseLimit()
+                        applyAdjustLimit()
                     }
-                    .disabled(NumberParsing.parseDouble(increaseAmount) == nil)
+                    .disabled(NumberParsing.parseDouble(adjustAmount) == nil)
                 }
             }
         }
     }
 
-    private func applyIncreaseLimit() {
-        guard let budget = currentBudget, let amount = NumberParsing.parseDouble(increaseAmount), amount > 0 else { return }
-        budgetVM.increaseLimit(for: budget, by: amount, context: context)
-        showIncreaseLimit = false
+    private func applyAdjustLimit() {
+        guard let budget = currentBudget, let amount = NumberParsing.parseDouble(adjustAmount), amount > 0 else { return }
+        if isIncrease {
+            budgetVM.increaseLimit(for: budget, by: amount, context: context)
+        } else {
+            budgetVM.decreaseLimit(for: budget, by: amount, context: context)
+        }
+        showAdjustLimit = false
     }
 }

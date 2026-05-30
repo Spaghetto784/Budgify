@@ -1,5 +1,6 @@
 import SwiftData
 import Foundation
+import SwiftUI
 
 struct SubscriptionInsight: Identifiable {
     let id: String
@@ -29,6 +30,7 @@ private struct DeletedTransactionSnapshot {
     let excludedFromBudget: Bool
     let tagsRaw: String
     let splitGroupID: String?
+    let splitsRaw: String
 }
 
 @Observable
@@ -75,6 +77,19 @@ final class TransactionViewModel {
             var dueDate = template.recurrenceNextDate ?? template.date
 
             while dueDate <= now {
+                // Skip if there is an exception for this series/day
+                if let key = template.recurrenceSeriesID {
+                    let day = Calendar.current.startOfDay(for: dueDate)
+                    var descriptor = FetchDescriptor<RecurringException>(
+                        predicate: #Predicate<RecurringException> { $0.key == key && $0.day == day }
+                    )
+                    descriptor.fetchLimit = 1
+                    if let found = try? context.fetch(descriptor), !found.isEmpty {
+                        dueDate = nextDate(after: dueDate, frequency: frequency)
+                        continue
+                    }
+                }
+
                 let occurrence = Transaction(
                     title: template.title,
                     amount: template.amount,
@@ -121,8 +136,22 @@ final class TransactionViewModel {
             isRecurringTemplate: transaction.isRecurringTemplate,
             excludedFromBudget: transaction.excludedFromBudget,
             tagsRaw: transaction.tagsRaw,
-            splitGroupID: transaction.splitGroupID
+            splitGroupID: transaction.splitGroupID,
+            splitsRaw: transaction.splitsRaw
         )
+        if transaction.isRecurringOccurrence, let key = transaction.seriesKey {
+            // Record an exception so this day won't reappear
+            let day = Calendar.current.startOfDay(for: transaction.date)
+            var descriptor = FetchDescriptor<RecurringException>(
+                predicate: #Predicate<RecurringException> { $0.key == key && $0.day == day }
+            )
+            descriptor.fetchLimit = 1
+            if (try? context.fetch(descriptor))?.isEmpty ?? true {
+                let ex = RecurringException(key: key, day: day)
+                context.insert(ex)
+                try? context.save()
+            }
+        }
         context.delete(transaction)
         try? context.save()
     }
@@ -152,7 +181,8 @@ final class TransactionViewModel {
             isRecurringTemplate: snapshot.isRecurringTemplate,
             excludedFromBudget: snapshot.excludedFromBudget,
             tagsRaw: snapshot.tagsRaw,
-            splitGroupID: snapshot.splitGroupID
+            splitGroupID: snapshot.splitGroupID,
+            splitsRaw: snapshot.splitsRaw
         )
         context.insert(restored)
         try? context.save()
@@ -264,3 +294,4 @@ final class TransactionViewModel {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+

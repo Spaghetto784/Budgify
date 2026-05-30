@@ -20,6 +20,7 @@ struct AddTransactionView: View {
     @State private var currency = "EUR"
     @State private var type: TransactionType = .expense
     @State private var selectedCategory: Category?
+    @State private var excludeFromBudget = false
     @State private var note = ""
     @State private var suggestedCategory: Category?
     @State private var isRecurring = false
@@ -28,8 +29,16 @@ struct AddTransactionView: View {
     @State private var selectedSavingsAccount: SavingsAccount?
     @State private var tagsText = ""
 
+    // Splits (multi-catégories)
+    @State private var useSplits = false
+    @State private var splitLines: [(categoryName: String, amount: String)] = []
+
     private var displayCurrencies: [String] {
         settingsVM.selectedCurrencies(available: currencyService.availableCurrencies)
+    }
+
+    private var currencySymbol: String {
+        currencyService.symbol(for: currency)
     }
 
     var body: some View {
@@ -159,6 +168,58 @@ struct AddTransactionView: View {
                             }
                         }
                     }
+                    
+                    Section("Répartition (multi-catégories)") {
+                        Toggle("Utiliser une répartition", isOn: $useSplits)
+                        if useSplits {
+                            if splitLines.isEmpty {
+                                Text("Aucune ligne de répartition")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(Array(splitLines.enumerated()), id: \.0) { index, line in
+                                    HStack {
+                                        Menu(line.categoryName.isEmpty ? "Catégorie" : line.categoryName) {
+                                            ForEach(categories) { cat in
+                                                Button(action: { splitLines[index].categoryName = cat.name }) {
+                                                    Text("\(cat.icon) \(cat.name)")
+                                                }
+                                            }
+                                        }
+                                        .buttonStyle(.bordered)
+
+                                        TextField("Montant", text: Binding(
+                                            get: { splitLines[index].amount },
+                                            set: { splitLines[index].amount = $0 }
+                                        ))
+                                        .keyboardType(.decimalPad)
+
+                                        Button(role: .destructive) {
+                                            splitLines.remove(at: index)
+                                        } label: {
+                                            Image(systemName: "trash")
+                                        }
+                                    }
+                                }
+                            }
+                            HStack {
+                                Button {
+                                    splitLines.append((categoryName: "", amount: ""))
+                                } label: {
+                                    Label("Ajouter une catégorie", systemImage: "plus.circle")
+                                }
+                                Spacer()
+                                Menu("Actions") {
+                                    Button("Suggérer") { suggestSplits() }
+                                    Button("Normaliser") { normalizeSplits() }
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
+                    Section("Budget") {
+                        Toggle("Exclure cette dépense du budget", isOn: $excludeFromBudget)
+                    }
                 }
 
                 Section("Note (optionnel)") {
@@ -185,12 +246,49 @@ struct AddTransactionView: View {
             .onAppear {
                 currency = displayCurrencies.first ?? "EUR"
                 selectedSavingsAccount = savingsAccounts.first
+                excludeFromBudget = false
             }
         }
     }
 
+    private func normalizeSplits() {
+        guard let total = NumberParsing.parseDouble(amount), total != 0 else { return }
+        // Map current UI lines to CategorySplit and normalize
+        let rawSplits: [CategorySplit] = splitLines.compactMap { line in
+            guard !line.categoryName.isEmpty, let amt = NumberParsing.parseDouble(line.amount) else { return nil }
+            return CategorySplit(categoryName: line.categoryName, amount: amt)
+        }
+        let normalized = SplitAllocator.normalize(splits: rawSplits, to: total)
+        // Reflect back into UI
+        splitLines = normalized.map { (categoryName: $0.categoryName, amount: String(format: "%.2f", $0.amount)) }
+    }
+
+    private func suggestSplits() {
+        // If we have a title, try a split suggestion from the classifier
+        if let split = classifier.predictSplitCategories(for: title), !split.isEmpty {
+            splitLines = split.map { (key: String, value: Double) in
+                (categoryName: key, amount: String(format: "%.2f", value * (NumberParsing.parseDouble(amount) ?? 0)))
+            }
+            normalizeSplits()
+            return
+        }
+        // Otherwise, seed with top-3 categories
+        let top = classifier.suggestTop(for: title, categories: categories, limit: 3)
+        guard !top.isEmpty else { return }
+        let total = NumberParsing.parseDouble(amount) ?? 0
+        let equal = total / Double(top.count == 0 ? 1 : top.count)
+        splitLines = top.map { (categoryName: $0.name, amount: String(format: "%.2f", equal)) }
+        normalizeSplits()
+    }
+
     private var isValid: Bool {
-        !title.isEmpty && NumberParsing.parseDouble(amount) != nil
+        if title.isEmpty { return false }
+        guard let total = NumberParsing.parseDouble(amount) else { return false }
+        if type == .expense && useSplits {
+            let validLines = splitLines.compactMap { NumberParsing.parseDouble($0.amount) }
+            return !validLines.isEmpty && total != 0
+        }
+        return true
     }
 
     private func save() {
@@ -214,8 +312,23 @@ struct AddTransactionView: View {
             note: storedNote,
             noteCiphertext: ciphertext,
             noteHash: noteHash,
+            excludedFromBudget: excludeFromBudget,
             tagsRaw: tagsText
         )
+
+        if type == .expense && useSplits {
+            let uiSplits: [CategorySplit] = splitLines.compactMap { line in
+                guard !line.categoryName.isEmpty, let amt = NumberParsing.parseDouble(line.amount) else { return nil }
+                return CategorySplit(categoryName: line.categoryName, amount: amt)
+            }
+            if !uiSplits.isEmpty {
+                transaction.applySplits(uiSplits)
+                // Si on utilise une répartition, on efface le snapshot mono-catégorie pour éviter les ambiguïtés
+                transaction.categoryNameSnapshot = nil
+                transaction.categoryIconSnapshot = nil
+                transaction.categoryColorHexSnapshot = nil
+            }
+        }
 
         transactionVM.add(transaction: transaction, context: context)
 
@@ -254,3 +367,4 @@ struct AddTransactionView: View {
         dismiss()
     }
 }
+

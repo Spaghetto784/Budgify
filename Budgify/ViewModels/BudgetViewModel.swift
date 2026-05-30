@@ -27,6 +27,12 @@ final class BudgetViewModel {
         try? context.save()
     }
 
+    func decreaseLimit(for budget: Budget, by amount: Double, context: ModelContext) {
+        guard amount > 0 else { return }
+        budget.limit = max(budget.limit - amount, 0)
+        try? context.save()
+    }
+
     func delete(budget: Budget, context: ModelContext) {
         context.delete(budget)
         try? context.save()
@@ -171,3 +177,4 @@ final class BudgetViewModel {
         return calendar.date(from: components) ?? date
     }
 }
+

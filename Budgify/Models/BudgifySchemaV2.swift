@@ -11,7 +11,8 @@ enum BudgifySchemaV2: VersionedSchema {
             SavingsAccount.self,
             SavingsEntry.self,
             SavingsGoal.self,
-            AppSettings.self
+            AppSettings.self,
+            RecurringException.self
         ]
     }
 }
