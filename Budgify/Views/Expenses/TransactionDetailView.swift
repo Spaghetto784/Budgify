@@ -199,8 +199,6 @@ struct TransactionDetailView: View {
             if transaction.type == .expense {
                 Section {
                     Button {
-                        splitAmount = ""
-                        splitCategory = classifier.suggest(for: transaction.title, categories: categories)
                         showSplit = true
                     } label: {
                         HStack { Spacer(); Text("Éditer la répartition"); Spacer() }

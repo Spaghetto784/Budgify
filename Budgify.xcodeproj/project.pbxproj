@@ -8,10 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		B93BD63F2F9B881D00C07CFD /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B93BD63E2F9B881D00C07CFD /* README.md */; };
+		B9DAF6C2306F0B9200B0CFE4 /* InputValidationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9DAF6C1306F0B9200B0CFE4 /* InputValidationHelper.swift */; };
+		B9DAF6C4306F0BC600B0CFE4 /* BankNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9DAF6C3306F0BC600B0CFE4 /* BankNotificationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B93BD63E2F9B881D00C07CFD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		B9DAF6C1306F0B9200B0CFE4 /* InputValidationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputValidationHelper.swift; sourceTree = "<group>"; };
+		B9DAF6C3306F0BC600B0CFE4 /* BankNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankNotificationService.swift; sourceTree = "<group>"; };
 		B9E97CDB2F995D4C001C4BB5 /* Budgify.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Budgify.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -40,6 +44,8 @@
 				B9E97CDD2F995D4C001C4BB5 /* Budgify */,
 				B9E97CDC2F995D4C001C4BB5 /* Products */,
 				B93BD63E2F9B881D00C07CFD /* README.md */,
+				B9DAF6C1306F0B9200B0CFE4 /* InputValidationHelper.swift */,
+				B9DAF6C3306F0BC600B0CFE4 /* BankNotificationService.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,6 +132,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B9DAF6C4306F0BC600B0CFE4 /* BankNotificationService.swift in Sources */,
+				B9DAF6C2306F0B9200B0CFE4 /* InputValidationHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

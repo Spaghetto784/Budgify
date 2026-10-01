@@ -11,6 +11,8 @@ struct StatsView: View {
     @State private var selectedCurrency = "EUR"
     @State private var selectedMonth = Date.now
     @State private var categoryChartStyle: Int = 0 // 0 = camembert, 1 = barres
+    @State private var animateCharts = false
+    @Namespace private var animation
 
     private var symbol: String { currencyService.symbol(for: selectedCurrency) }
 
@@ -76,23 +78,29 @@ struct StatsView: View {
             }
 
             Section("Vue d'ensemble") {
-                HStack {
-                    overviewCard(label: "Revenus", value: totalIncome, color: .green, icon: "arrow.up.circle.fill")
-                    overviewCard(label: "Dépenses", value: totalExpenses, color: .red, icon: "arrow.down.circle.fill")
-                    overviewCard(label: "Savings", value: savings, color: savings >= 0 ? .blue : .orange, icon: "banknote")
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        overviewCard(label: "Revenus", value: totalIncome, color: .green, icon: "arrow.up.circle.fill")
+                        Divider()
+                        overviewCard(label: "Dépenses", value: totalExpenses, color: .red, icon: "arrow.down.circle.fill")
+                    }
+                    
+                    Divider()
+                    
+                    HStack(spacing: 0) {
+                        overviewCard(label: "Savings", value: savings, color: savings >= 0 ? .blue : .orange, icon: "banknote.fill")
+                        Divider()
+                        overviewCard(label: "Prêts", value: totalLoans, color: .orange, icon: "arrow.triangle.2.circlepath")
+                    }
                 }
+                .background(RoundedRectangle(cornerRadius: 16).fill(.thinMaterial))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
-
-                HStack {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundStyle(.orange)
-                    Text("Prêts")
-                    Spacer()
-                    Text("\(symbol)\(String(format: "%.2f", totalLoans))")
-                        .bold()
-                        .foregroundStyle(.orange)
-                }
+                .padding(.horizontal)
+                .scaleEffect(animateCharts ? 1 : 0.8)
+                .opacity(animateCharts ? 1 : 0)
 
                 HStack {
                     Image(systemName: "number")
@@ -101,51 +109,100 @@ struct StatsView: View {
                     Spacer()
                     Text("\(monthTransactions.count)")
                         .bold()
+                        .contentTransition(.numericText())
                 }
             }
 
             if !byCategory.isEmpty {
-                Section("Par catégorie") {
+                Section {
                     Picker("Style", selection: $categoryChartStyle) {
-                        Text("Camembert").tag(0)
-                        Text("Barres").tag(1)
+                        Label("Camembert", systemImage: "chart.pie.fill").tag(0)
+                        Label("Barres", systemImage: "chart.bar.fill").tag(1)
                     }
                     .pickerStyle(.segmented)
 
                     if categoryChartStyle == 0 {
                         Chart(byCategory, id: \.name) { item in
                             SectorMark(
-                                angle: .value("Total", item.total),
+                                angle: .value("Total", animateCharts ? item.total : 0),
                                 innerRadius: .ratio(0.55),
                                 angularInset: 2
                             )
                             .foregroundStyle(Color(hex: item.color))
+                            .annotation(position: .overlay) {
+                                if item.total > totalExpenses * 0.1 {
+                                    Text(item.icon)
+                                        .font(.title2)
+                                }
+                            }
                         }
-                        .frame(height: 200)
+                        .frame(height: 250)
                         .padding(.vertical, 8)
+                        .chartBackground { _ in
+                            VStack {
+                                Text(symbol + String(format: "%.0f", totalExpenses))
+                                    .font(.title2.bold())
+                                    .contentTransition(.numericText())
+                                Text("Total")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     } else {
-                        Chart(byCategory, id: \.name) { item in
+                        Chart(byCategory.sorted { $0.total > $1.total }, id: \.name) { item in
                             BarMark(
-                                x: .value("Catégorie", "\(item.icon) \(item.name)"),
-                                y: .value("Total", item.total)
+                                x: .value("Total", animateCharts ? item.total : 0),
+                                y: .value("Catégorie", item.name)
                             )
-                            .foregroundStyle(Color(hex: item.color))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: item.color), Color(hex: item.color).opacity(0.6)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .annotation(position: .trailing, spacing: 8) {
+                                Text(symbol + String(format: "%.0f", item.total))
+                                    .font(.caption.bold())
+                                    .foregroundColor(.primary)
+                            }
                         }
-                        .frame(height: 220)
+                        .frame(height: max(250, CGFloat(byCategory.count) * 50))
                         .padding(.vertical, 8)
+                        .chartXAxis(.hidden)
+                        .chartYAxis {
+                            AxisMarks { value in
+                                AxisValueLabel {
+                                    if let name = value.as(String.self),
+                                       let item = byCategory.first(where: { $0.name == name }) {
+                                        Text("\(item.icon) \(name)")
+                                            .font(.caption)
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    ForEach(byCategory, id: \.name) { item in
+                    ForEach(byCategory.sorted { $0.total > $1.total }, id: \.name) { item in
                         HStack {
                             Circle()
                                 .fill(Color(hex: item.color))
-                                .frame(width: 10, height: 10)
+                                .frame(width: 12, height: 12)
                             Text("\(item.icon) \(item.name)")
+                                .font(.subheadline)
                             Spacer()
-                            Text("\(symbol)\(String(format: "%.2f", item.total))")
-                                .bold()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(symbol)\(String(format: "%.2f", item.total))")
+                                    .bold()
+                                Text("\(Int((item.total / totalExpenses) * 100))%")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
+                } header: {
+                    Label("Dépenses par catégorie", systemImage: "chart.pie")
                 }
             }
 
@@ -221,25 +278,34 @@ struct StatsView: View {
         .onAppear {
             transactionVM.transactions = transactions
             selectedCurrency = displayCurrencies.first ?? "EUR"
+            withAnimation(.spring(duration: 0.8, bounce: 0.3).delay(0.1)) {
+                animateCharts = true
+            }
         }
+        .onChange(of: selectedMonth) { _, _ in
+            animateCharts = false
+            withAnimation(.spring(duration: 0.8, bounce: 0.3).delay(0.1)) {
+                animateCharts = true
+            }
+        }
+        .animation(.smooth, value: categoryChartStyle)
     }
 
     private func overviewCard(label: String, value: Double, color: Color, icon: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(color)
-                .font(.title3)
+                .font(.title2)
+                .imageScale(.large)
             Text("\(symbol)\(String(format: "%.0f", value))")
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundStyle(color)
+                .contentTransition(.numericText())
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(color.opacity(0.08))
-        .cornerRadius(10)
-        .padding(.horizontal, 4)
+        .padding()
     }
 }

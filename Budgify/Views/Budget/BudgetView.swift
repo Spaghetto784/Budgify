@@ -15,6 +15,8 @@ struct BudgetView: View {
     @State private var adjustAmount = ""
     @State private var isIncrease = true
     @State private var showSummary = false
+    @State private var animateProgress = false
+    @Namespace private var animation
 
     private var currentBudget: Budget? { budgetVM.budget(containing: selectedDate) }
     private var symbol: String { currentBudget.map { currencyService.symbol(for: $0.currency) } ?? "€" }
@@ -71,53 +73,111 @@ struct BudgetView: View {
                 }
 
                 Section("Vue d'ensemble") {
-                    VStack(spacing: 12) {
-                        ProgressView(value: progress)
-                            .tint(progress > 0.9 ? .red : progress > 0.7 ? .orange : .green)
-                            .scaleEffect(x: 1, y: 2)
+                    VStack(spacing: 16) {
+                        // Circular progress indicator
+                        ZStack {
+                            Circle()
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 20)
+                                .frame(width: 200, height: 200)
+                            
+                            Circle()
+                                .trim(from: 0, to: animateProgress ? progress : 0)
+                                .stroke(
+                                    progress > 0.9 ? .red :
+                                    progress > 0.7 ? .orange : .green,
+                                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
+                                )
+                                .frame(width: 200, height: 200)
+                                .rotationEffect(.degrees(-90))
+                                .animation(.spring(duration: 1.0, bounce: 0.3), value: animateProgress)
+                            
+                            VStack(spacing: 4) {
+                                Text("\(Int(progress * 100))%")
+                                    .font(.system(size: 42, weight: .bold))
+                                    .contentTransition(.numericText())
+                                Text("utilisé")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical)
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Dépensé")
+                        HStack(spacing: 20) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Dépensé", systemImage: "arrow.down.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text("\(symbol)\(String(format: "%.2f", spent))")
-                                    .font(.headline)
+                                    .font(.title3.bold())
                                     .foregroundStyle(.red)
+                                    .contentTransition(.numericText())
                             }
-                            Spacer()
-                            VStack(alignment: .center, spacing: 2) {
-                                Text("Restant")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.red.opacity(0.1))
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Restant", systemImage: "banknote.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text("\(symbol)\(String(format: "%.2f", remaining))")
-                                    .font(.headline)
+                                    .font(.title3.bold())
                                     .foregroundStyle(remaining < 0 ? .red : .green)
+                                    .contentTransition(.numericText())
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Limite")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text("\(symbol)\(String(format: "%.2f", budget.limit))")
-                                    .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill((remaining < 0 ? Color.red : .green).opacity(0.1))
                             }
                         }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Limite", systemImage: "flag.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(symbol)\(String(format: "%.2f", budget.limit))")
+                                .font(.title3.bold())
+                                .contentTransition(.numericText())
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.blue.opacity(0.1))
+                        }
                     }
-                    .padding(.vertical, 4)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .padding(.horizontal)
 
                     if budget.rolloverFromPreviousMonth > 0 {
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .foregroundStyle(.blue)
-                            Text("Report de la période précédente")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .imageScale(.large)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Report de la période précédente")
+                                    .font(.subheadline)
+                                Text("+\(symbol)\(String(format: "%.2f", budget.rolloverFromPreviousMonth))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             Spacer()
                             Text("+\(symbol)\(String(format: "%.2f", budget.rolloverFromPreviousMonth))")
-                                .font(.caption.bold())
+                                .font(.headline)
                                 .foregroundStyle(.blue)
                         }
+                        .padding()
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.blue.opacity(0.1))
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
 
@@ -132,21 +192,64 @@ struct BudgetView: View {
                 }
 
                 if let alertMessage {
-                    Section("Alertes") {
-                        Label(alertMessage, systemImage: "bell.badge.fill")
-                            .foregroundStyle(.orange)
-                        if let projectedOverrunDays, projectedOverrunDays > 0 {
-                            Text("Au rythme actuel, dépassement estimé dans \(projectedOverrunDays) jour(s).")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .imageScale(.large)
+                                Text(alertMessage)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                            }
+                            
+                            if let projectedOverrunDays, projectedOverrunDays > 0 {
+                                Divider()
+                                HStack {
+                                    Image(systemName: "chart.line.uptrend.xyaxis")
+                                        .foregroundStyle(.orange)
+                                    Text("Dépassement estimé dans \(projectedOverrunDays) jour\(projectedOverrunDays > 1 ? "s" : "")")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        .padding()
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.orange.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(.orange.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .padding(.horizontal)
+                    } header: {
+                        Label("Alertes", systemImage: "bell.badge.fill")
                     }
+                    .transition(.scale.combined(with: .opacity))
                 } else if let projectedOverrunDays, projectedOverrunDays > 0 {
-                    Section("Prévision") {
-                        Text("Au rythme actuel, dépassement estimé dans \(projectedOverrunDays) jour(s).")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Section {
+                        HStack {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundStyle(.blue)
+                            Text("Dépassement estimé dans \(projectedOverrunDays) jour\(projectedOverrunDays > 1 ? "s" : "")")
+                                .font(.subheadline)
+                        }
+                        .padding()
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.blue.opacity(0.1))
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .padding(.horizontal)
+                    } header: {
+                        Label("Prévision", systemImage: "crystal.ball")
                     }
+                    .transition(.scale.combined(with: .opacity))
                 }
 
                 Section("Revenus") {
@@ -259,10 +362,17 @@ struct BudgetView: View {
             transactionVM.transactions = transactions
             budgetVM.ensureRecurringBudgetForCurrentMonth(context: context, transactions: transactions, rates: currencyService.rates)
             triggerBudgetNotificationIfNeeded()
+            withAnimation(.spring(duration: 1.0, bounce: 0.3).delay(0.2)) {
+                animateProgress = true
+            }
         }
         .onChange(of: selectedDate) { _, _ in
             budgetVM.budgets = budgets
             triggerBudgetNotificationIfNeeded()
+            animateProgress = false
+            withAnimation(.spring(duration: 1.0, bounce: 0.3).delay(0.1)) {
+                animateProgress = true
+            }
         }
         .onChange(of: budgets.count) { _, _ in
             budgetVM.budgets = budgets
@@ -272,6 +382,8 @@ struct BudgetView: View {
             transactionVM.transactions = transactions
             triggerBudgetNotificationIfNeeded()
         }
+        .animation(.smooth, value: spent)
+        .animation(.smooth, value: remaining)
     }
 
     private func triggerBudgetNotificationIfNeeded() {
